@@ -105,6 +105,8 @@ export class SolarSystemRenderer {
    * than being flattened to look like Earth orbit.
    */
   private exposure = 1;
+  private lastWidth = 0;
+  private lastHeight = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -386,6 +388,21 @@ export class SolarSystemRenderer {
   // Frame
   // -------------------------------------------------------------------------
 
+  /**
+   * Match the drawing buffer to the element. Checked every frame rather than
+   * only on window resize events: the canvas can be laid out after the
+   * renderer is constructed, or resized by something other than the window,
+   * and either leaves the scene rendering into a corner of itself.
+   */
+  private syncSize(): void {
+    const width = this.canvas.clientWidth || window.innerWidth;
+    const height = this.canvas.clientHeight || window.innerHeight;
+    if (width === this.lastWidth && height === this.lastHeight) return;
+    this.lastWidth = width;
+    this.lastHeight = height;
+    this.resize();
+  }
+
   resize(): void {
     const stars = this.stars?.material as THREE.ShaderMaterial | undefined;
     if (stars?.uniforms.uPixelRatio) {
@@ -405,6 +422,7 @@ export class SolarSystemRenderer {
 
   render(world: World): void {
     if (this.contextLost) return;
+    this.syncSize();
 
     const shipPos = world.ship.pos;
     const height = this.renderer.domElement.height || 1;
