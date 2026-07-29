@@ -397,6 +397,9 @@ export class SolarSystemRenderer {
   private syncSize(): void {
     const width = this.canvas.clientWidth || window.innerWidth;
     const height = this.canvas.clientHeight || window.innerHeight;
+    // A hidden tab reports zero for both. Keep the last real size rather than
+    // allocating a zero-sized buffer; the next visible frame corrects it.
+    if (width <= 0 || height <= 0) return;
     if (width === this.lastWidth && height === this.lastHeight) return;
     this.lastWidth = width;
     this.lastHeight = height;
@@ -408,8 +411,8 @@ export class SolarSystemRenderer {
     if (stars?.uniforms.uPixelRatio) {
       stars.uniforms.uPixelRatio.value = this.renderer.getPixelRatio();
     }
-    const width = this.canvas.clientWidth || window.innerWidth;
-    const height = this.canvas.clientHeight || window.innerHeight;
+    const width = Math.max(1, this.canvas.clientWidth || window.innerWidth);
+    const height = Math.max(1, this.canvas.clientHeight || window.innerHeight);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
