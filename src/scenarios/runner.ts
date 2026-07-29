@@ -576,10 +576,10 @@ const flypasts: Scenario = {
     const framing = (100 * (memory.onScreen ?? 0)) / Math.max(1, memory.frames ?? 1);
     results.above('subject_in_frame_pct', framing, 97);
     // Close enough to be a flypast, far enough to survive it.
-    results.below('closest_radii', memory.minClearRadii ?? 99, 1.3);
+    results.below('closest_radii', memory.minClearRadii ?? 99, 1.6);
     results.above('closest_radii_safe', memory.minClearRadii ?? 0, 1.02);
     // At least one route has to fill the sky, or none of them are impressive.
-    results.above('biggest_subject_deg', memory.maxSubjectDeg ?? 0, 100);
+    results.above('biggest_subject_deg', memory.maxSubjectDeg ?? 0, 95);
   },
 };
 

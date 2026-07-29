@@ -602,13 +602,15 @@ export class Hud {
     const lines: Array<{ text: string; danger: boolean }> = [];
 
     const impact = world.timeToImpact();
-    if (impact < 120 && !world.ship.destroyed) {
+    // A sightseeing route is a camera move on rails; it passes close on
+    // purpose, so a collision warning is just noise across the shot.
+    if (impact < 120 && !world.ship.destroyed && !world.flyby.active) {
       lines.push({
         text: `COLLISION COURSE · ${getBody(world.nearest.id).name.toUpperCase()} · ${impact.toFixed(0)} s`,
         danger: impact < 30,
       });
     }
-    if (world.ship.currentAccel / G0 > 8) {
+    if (world.ship.currentAccel / G0 > 8 && !world.flyby.active) {
       lines.push({ text: `HIGH G-LOAD · ${(world.ship.currentAccel / G0).toFixed(0)} g`, danger: world.ship.currentAccel / G0 > 20 });
     }
     if (world.ship.mode === 'override') {
