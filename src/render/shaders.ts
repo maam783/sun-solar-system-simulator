@@ -1,6 +1,15 @@
 /**
  * GLSL for the custom materials.
  *
+ * Besides the depth chunks, every fragment shader here ends with three's
+ * `tonemapping_fragment` and `colorspace_fragment`. A ShaderMaterial does not
+ * apply those for free the way the built-in materials do, and without them the
+ * renderer's exposure setting does nothing and linear values are written
+ * straight to an sRGB target — which looks like a correctly lit planet with
+ * the lights off. Only the body chunks belong here: three already injects the
+ * matching `_pars_` declarations into the fragment prefix, and including them
+ * a second time is a redefinition error that fails the whole shader.
+ *
  * Every shader here includes three's `logdepthbuf` chunks. With a logarithmic
  * depth buffer the depth value is written by that chunk rather than by the
  * fixed pipeline, so a custom shader that omits it sorts against the built-in
@@ -108,11 +117,6 @@ export const PLANET_FRAG = /* glsl */ `
       }
     }
 
-    if (uIsStar) {
-      gl_FragColor = vec4(albedo, 1.0);
-      return;
-    }
-
     vec3 toSun = normalize(uSunPos - vPosW);
     float lambert = max(dot(n, toSun), 0.0);
 
@@ -131,6 +135,8 @@ export const PLANET_FRAG = /* glsl */ `
     color += albedo * 0.012;
 
     gl_FragColor = vec4(color, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -144,6 +150,7 @@ export const SUN_FRAG = /* glsl */ `
 
   uniform vec3 uCameraPosW;
   uniform float uTime;
+  uniform float uIrradiance;
 
   varying vec3 vNormalW;
   varying vec3 vPosW;
@@ -188,7 +195,9 @@ export const SUN_FRAG = /* glsl */ `
     vec3 limb = vec3(1.0, 0.62, 0.26);
     vec3 color = mix(limb, core, pow(clamp(intensity, 0.0, 1.0), 0.6));
 
-    gl_FragColor = vec4(color * intensity * 4.0, 1.0);
+    gl_FragColor = vec4(color * intensity * uIrradiance, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -223,6 +232,8 @@ export const ATMOSPHERE_FRAG = /* glsl */ `
 
     float alpha = rim * clamp(lit * 1.3, 0.0, 1.0) * forward;
     gl_FragColor = vec4(uColor * uIrradiance, clamp(alpha, 0.0, 1.0));
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -300,6 +311,8 @@ export const RING_FRAG = /* glsl */ `
     shadow = mix(0.06, 1.0, shadow);
 
     gl_FragColor = vec4(tint * uIrradiance * shadow, density);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 
@@ -308,6 +321,7 @@ export const STAR_VERT = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
 
+  uniform float uPixelRatio;
   attribute float aSize;
   attribute vec3 aColor;
   varying vec3 vColor;
@@ -319,7 +333,7 @@ export const STAR_VERT = /* glsl */ `
     vec4 world = modelMatrix * vec4(position, 1.0);
     vec4 mv = viewMatrix * world;
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = aSize;
+    gl_PointSize = aSize * uPixelRatio;
     #include <logdepthbuf_vertex>
   }
 `;
@@ -341,5 +355,6 @@ export const STAR_FRAG = /* glsl */ `
     float a = clamp(core + halo, 0.0, 1.0);
     if (a < 0.004) discard;
     gl_FragColor = vec4(vColor, a);
+    #include <colorspace_fragment>
   }
 `;

@@ -118,7 +118,7 @@ export const RENDER = {
 
 export const PHOTOMETRY = {
   /** Faintest magnitude drawn. Naked-eye limit is about 6.5. */
-  faintestMagnitude: 6.5,
+  faintestMagnitude: 7.0,
   /** Magnitude at which a point source saturates and starts to bloom. */
   saturationMagnitude: -1.0,
   /** Display gamma applied to the brightness ramp. */

@@ -94,6 +94,18 @@ export class SolarSystemRenderer {
   texturesLoaded = 0;
   texturesFailed = 0;
 
+  /**
+   * Exposure, adapting the way an eye does.
+   *
+   * Sunlight at Jupiter is 1/27 of Earth's and at Pluto 1/1500, and the shader
+   * applies that literally — which is correct radiometry and a black screen.
+   * A real observer's eye (or a camera's exposure) opens up instead, so the
+   * scene here is exposed for the local light level. The compensation is
+   * deliberately partial, so the outer system still reads as dimmer rather
+   * than being flattened to look like Earth orbit.
+   */
+  private exposure = 1;
+
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -295,7 +307,7 @@ export class SolarSystemRenderer {
       colors[i * 3] = r * brightness;
       colors[i * 3 + 1] = g * brightness;
       colors[i * 3 + 2] = b * brightness;
-      sizes[i] = 1.2 + 3.6 * brightness * brightness;
+      sizes[i] = 1.4 + 4.2 * brightness * brightness;
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -306,6 +318,7 @@ export class SolarSystemRenderer {
     const material = new THREE.ShaderMaterial({
       vertexShader: STAR_VERT,
       fragmentShader: STAR_FRAG,
+      uniforms: { uPixelRatio: { value: this.renderer.getPixelRatio() } },
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -374,6 +387,10 @@ export class SolarSystemRenderer {
   // -------------------------------------------------------------------------
 
   resize(): void {
+    const stars = this.stars?.material as THREE.ShaderMaterial | undefined;
+    if (stars?.uniforms.uPixelRatio) {
+      stars.uniforms.uPixelRatio.value = this.renderer.getPixelRatio();
+    }
     const width = this.canvas.clientWidth || window.innerWidth;
     const height = this.canvas.clientHeight || window.innerHeight;
     this.renderer.setSize(width, height, false);
@@ -397,6 +414,8 @@ export class SolarSystemRenderer {
     const q = world.ship.attitude;
     this.camera.quaternion.set(q[0], q[1], q[2], q[3]);
 
+    this.updateExposure(world);
+
     // The Sun's position relative to the ship drives every lighting term.
     const sunState = world.bodyState('sun');
     sub(sunRel, sunState.pos, shipPos);
@@ -410,6 +429,24 @@ export class SolarSystemRenderer {
     this.updateSunGlare(world, shipPos, sunRel, sunDistance, fovRad, height);
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private updateExposure(world: World): void {
+    // Light level where the ship is, relative to Earth's 1361 W/m^2.
+    const distance = Math.max(len(world.ship.pos), getBody('sun').radius);
+    const level = solarIrradiance(distance) / 1361;
+    // Exponent below 1 leaves some of the real falloff visible.
+    //
+    // The floor matters more than it looks. A lit surface's radiance does not
+    // depend on how far away the observer is - only the solid angle does - so
+    // the Sun's disc emits the same value from Mercury as from Pluto. Letting
+    // the exposure close arbitrarily far while approaching the Sun would
+    // therefore make the Sun get *darker* as you fly into it. Stopping the
+    // adaptation here keeps it blazing, which is both correct and the point.
+    const target = Math.max(0.3, Math.min(4000, Math.pow(1 / level, 0.85)));
+    // Adaptation takes a moment, as it does for eyes.
+    this.exposure += (target - this.exposure) * 0.08;
+    this.renderer.toneMappingExposure = this.exposure;
   }
 
   private updateBody(
@@ -441,8 +478,11 @@ export class SolarSystemRenderer {
 
     // Sunlight falling on this body, normalised to Earth's 1361 W/m^2 so that
     // Pluto really does look dim and Mercury really does look harsh.
+    // A lit surface is scaled by the sunlight falling on it. The Sun itself is
+    // not lit by anything: it emits, at a radiance that does not vary with
+    // where the observer stands.
     const irradiance = view.def.id === 'sun'
-      ? 1
+      ? 4
       : Math.min(6, solarIrradiance(len(state.pos)) / 1361);
 
     if (useMesh) {
