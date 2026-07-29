@@ -13,6 +13,8 @@
 
 import { AU, C_LIGHT, getBody } from '../data/constants';
 import { AUTOPILOT, G0, NAV_TARGETS, SPEED, WARP } from '../config';
+import { FLYBY_ROUTES } from '../sim/flyby';
+import { PilotDrive } from '../sim/pilot';
 import { formatDuration, formatSimDate } from '../sim/time';
 import type { World } from '../sim/world';
 import type { SolarSystemRenderer } from '../render/scene';
@@ -82,6 +84,11 @@ export interface HudCallbacks {
   onRespawn: () => void;
   onSetHold: (hold: AttitudeHold) => void;
   onToggleAssist: () => void;
+  onStartFlyby: (routeId: string) => void;
+  onCancelFlyby: () => void;
+  onSetFlightModel: (model: 'pilot' | 'orbital') => void;
+  onAllStop: () => void;
+  onFlyToTarget: () => void;
 }
 
 export class Hud {
@@ -97,6 +104,7 @@ export class Hud {
   private markerNodes = new Map<string, HTMLElement>();
 
   helpVisible = false;
+  advanced = false;
 
   constructor(private readonly callbacks: HudCallbacks) {
     this.root = document.getElementById('hud')!;
@@ -109,10 +117,18 @@ export class Hud {
     return node;
   }
 
-  private addRow(parent: HTMLElement, key: string, label: string): void {
+  private addRow(parent: HTMLElement, key: string, label: string, advanced = false): void {
     const { root, value } = row(label);
+    if (advanced) root.classList.add('adv');
     parent.appendChild(root);
     this.fields.set(key, value);
+  }
+
+  /** Show or hide the engineering readouts. */
+  setAdvanced(on: boolean): void {
+    this.advanced = on;
+    this.root.classList.toggle('advanced', on);
+    this.buttons.get('advanced')?.classList.toggle('on', on);
   }
 
   private build(): void {
@@ -122,6 +138,7 @@ export class Hud {
     this.root.appendChild(this.markers);
 
     this.buildFlightPanel();
+    this.buildSightsPanel();
     this.buildNavPanel();
     this.buildConsolePanel();
     this.buildTimePanel();
@@ -143,20 +160,42 @@ export class Hud {
     panel.appendChild(speedSub);
     this.fields.set('speedSub', speedSub);
 
+    // Throttle: a bar, because "how fast am I asking to go" is the one control
+    // a pilot needs to read at a glance.
+    const bar = el('div', 'bar');
+    const fill = el('div', 'fill');
+    bar.appendChild(fill);
+    panel.appendChild(bar);
+    this.fields.set('throttleFill', fill);
+    const throttleLabel = el('div', 'sub', 'THROTTLE — W faster · S slower');
+    panel.appendChild(throttleLabel);
+    this.fields.set('throttleLabel', throttleLabel);
+
     panel.appendChild(el('div', 'sep'));
-    this.addRow(panel, 'mode', 'MODE');
-    this.addRow(panel, 'reference', 'REFERENCE');
+    this.addRow(panel, 'reference', 'NEAR');
     this.addRow(panel, 'altitude', 'ALTITUDE');
-    this.addRow(panel, 'gload', 'G-LOAD');
-    this.addRow(panel, 'thrust', 'DRIVE');
-    this.addRow(panel, 'assist', 'ASSIST');
+    this.addRow(panel, 'mode', 'DRIVE', true);
+    this.addRow(panel, 'gload', 'G-LOAD', true);
+    this.addRow(panel, 'thrust', 'THRUST', true);
+    this.addRow(panel, 'assist', 'ASSIST', true);
 
-    panel.appendChild(el('div', 'sep'));
-    this.addRow(panel, 'apoapsis', 'APOAPSIS');
-    this.addRow(panel, 'periapsis', 'PERIAPSIS');
-    this.addRow(panel, 'period', 'PERIOD');
+    const orbitRows = el('div', 'adv');
+    panel.appendChild(orbitRows);
+    orbitRows.appendChild(el('div', 'sep'));
+    this.addRow(orbitRows, 'apoapsis', 'APOAPSIS');
+    this.addRow(orbitRows, 'periapsis', 'PERIAPSIS');
+    this.addRow(orbitRows, 'period', 'PERIOD');
 
-    const btns = el('div', 'btns');
+    const modelBtns = el('div', 'btns');
+    const pilotBtn = button('PILOT', () => this.callbacks.onSetFlightModel('pilot'));
+    const orbitalBtn = button('ORBITAL', () => this.callbacks.onSetFlightModel('orbital'));
+    this.buttons.set('modelPilot', pilotBtn);
+    this.buttons.set('modelOrbital', orbitalBtn);
+    modelBtns.append(pilotBtn, orbitalBtn);
+    modelBtns.appendChild(button('ALL STOP', () => this.callbacks.onAllStop()));
+    panel.appendChild(modelBtns);
+
+    const btns = el('div', 'btns adv');
     const normal = button('NORMAL', () => this.callbacks.onSetMode('normal'));
     const override = button('OVERRIDE', () => this.callbacks.onSetMode('override'));
     this.buttons.set('modeNormal', normal);
@@ -170,7 +209,7 @@ export class Hud {
     }
     panel.appendChild(btns);
 
-    const assistBtns = el('div', 'btns');
+    const assistBtns = el('div', 'btns adv');
     assistBtns.appendChild(button('ASSIST', () => this.callbacks.onToggleAssist()));
     for (const hold of ['off', 'prograde', 'retrograde', 'target'] as AttitudeHold[]) {
       const b = button(hold.toUpperCase().slice(0, 4), () => this.callbacks.onSetHold(hold));
@@ -178,6 +217,42 @@ export class Hud {
       assistBtns.appendChild(b);
     }
     panel.appendChild(assistBtns);
+
+    this.root.appendChild(panel);
+  }
+
+  /**
+   * The reason to have a ship. One click each, no piloting required — the ship
+   * flies the shot and points itself at the subject.
+   */
+  private buildSightsPanel(): void {
+    const panel = el('div', 'panel');
+    panel.id = 'sights';
+    panel.appendChild(el('h2', '', 'Sights'));
+
+    for (const route of FLYBY_ROUTES) {
+      const b = button(route.name.toUpperCase(), () => this.callbacks.onStartFlyby(route.id));
+      b.className = 'wide';
+      b.title = route.blurb;
+      panel.appendChild(b);
+      this.buttons.set(`flyby_${route.id}`, b);
+    }
+
+    const status = el('div', 'sub', '');
+    panel.appendChild(status);
+    this.fields.set('flybyStatus', status);
+
+    const bar = el('div', 'bar');
+    const fill = el('div', 'fill warn');
+    bar.appendChild(fill);
+    bar.id = 'flybybar';
+    panel.appendChild(bar);
+    this.fields.set('flybyFill', fill);
+
+    const cancel = button('CANCEL', () => this.callbacks.onCancelFlyby());
+    cancel.className = 'wide';
+    panel.appendChild(cancel);
+    this.buttons.set('flybyCancel', cancel);
 
     this.root.appendChild(panel);
   }
@@ -201,21 +276,27 @@ export class Hud {
     panel.appendChild(this.targetSelect);
 
     this.addRow(panel, 'range', 'RANGE');
-    this.addRow(panel, 'closing', 'CLOSING');
     this.addRow(panel, 'targetSize', 'APPARENT');
+    this.addRow(panel, 'closing', 'CLOSING', true);
     this.addRow(panel, 'eta', 'ETA');
-    this.addRow(panel, 'apPhase', 'AUTOPILOT');
+    this.addRow(panel, 'apPhase', 'STATUS');
 
     const btns = el('div', 'btns');
-    const engage = button('ENGAGE', () => this.callbacks.onEngageAutopilot());
-    this.buttons.set('engage', engage);
-    btns.appendChild(engage);
-    btns.appendChild(button('ABORT', () => this.callbacks.onDisengageAutopilot()));
-    btns.appendChild(button('ORBIT', () => this.callbacks.onCircularize()));
+    const go = button('FLY THERE', () => this.callbacks.onFlyToTarget());
+    go.className = 'wide';
+    this.buttons.set('engage', go);
+    panel.appendChild(go);
+
+    const btns2 = el('div', 'btns');
+    btns2.appendChild(button('STOP', () => this.callbacks.onDisengageAutopilot()));
+    btns2.appendChild(button('ORBIT HERE', () => this.callbacks.onCircularize()));
+    panel.appendChild(btns2);
+
     btns.appendChild(button('HOHMANN', () => this.callbacks.onHohmann()));
+    btns.className = 'btns adv';
     panel.appendChild(btns);
 
-    const accel = el('div', 'btns');
+    const accel = el('div', 'btns adv');
     AUTOPILOT.accelPresets.forEach((value, i) => {
       const b = button(`${Math.round(value / G0)}g`, () => this.callbacks.onSetAccel(value));
       this.buttons.set(`accel${i}`, b);
@@ -230,13 +311,14 @@ export class Hud {
     const panel = el('div', 'panel');
     panel.id = 'console';
     panel.appendChild(el('h2', '', 'Reality check'));
+    this.fields.set('consolePanel', panel);
 
-    this.addRow(panel, 'deltaV', 'ΔV SPENT');
-    this.addRow(panel, 'chemical', 'CHEMICAL (Isp 450 s)');
-    this.addRow(panel, 'fusion', 'FUSION (Isp 1e5 s)');
-    this.addRow(panel, 'antimatter', 'ANTIMATTER (0.3 c)');
+    this.addRow(panel, 'deltaV', 'ΔV SPENT', true);
+    this.addRow(panel, 'chemical', 'CHEMICAL (Isp 450 s)', true);
+    this.addRow(panel, 'fusion', 'FUSION (Isp 1e5 s)', true);
+    this.addRow(panel, 'antimatter', 'ANTIMATTER (0.3 c)', true);
 
-    const note = el('div', 'hint',
+    const note = el('div', 'hint adv',
       'Mass ratio a real rocket would need for the ΔV spent so far (m0/m1 = e^(Δv/ve)).');
     panel.appendChild(note);
 
@@ -244,6 +326,9 @@ export class Hud {
     const btns = el('div', 'btns');
     btns.appendChild(button('CONTROLS (H)', () => this.callbacks.onToggleHelp()));
     btns.appendChild(button('RESPAWN (R)', () => this.callbacks.onRespawn()));
+    const adv = button('ENGINEERING', () => this.setAdvanced(!this.advanced));
+    this.buttons.set('advanced', adv);
+    btns.appendChild(adv);
     panel.appendChild(btns);
 
     const status = el('div', 'hint', '');
@@ -259,10 +344,10 @@ export class Hud {
     panel.appendChild(el('h2', '', 'Time'));
 
     this.addRow(panel, 'date', 'DATE');
-    this.addRow(panel, 'met', 'MISSION TIME');
+    this.addRow(panel, 'met', 'MISSION TIME', true);
     this.addRow(panel, 'warp', 'TIME WARP');
-    this.addRow(panel, 'warpNote', 'STATUS');
-    this.addRow(panel, 'fps', 'FPS');
+    this.addRow(panel, 'warpNote', 'STATUS', true);
+    this.addRow(panel, 'fps', 'FPS', true);
 
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -315,18 +400,25 @@ export class Hud {
     this.overlay.classList.add('show', 'help');
     this.overlayTitle.textContent = 'FLIGHT CONTROLS';
     this.overlayBody.innerHTML = `
+      <p style="text-align:left;margin-bottom:10px">
+        <strong>Flying is four keys.</strong> Point with the mouse, <kbd
+        style="all:revert">W</kbd> to go faster, <kbd style="all:revert">S</kbd>
+        slower, <kbd style="all:revert">Space</kbd> to stop. The ship holds
+        itself against gravity, so letting go of everything leaves you parked
+        next to whatever you are looking at. Or just click a flypast and watch.
+      </p>
       <div class="keys">
-        <div><kbd>Mouse</kbd>Pitch / yaw (click to capture)</div>
+        <div><kbd>Mouse</kbd>Point the nose (click to capture)</div>
         <div><kbd>Esc</kbd>Release the mouse / close this</div>
+        <div><kbd>W / S</kbd>Faster / slower</div>
+        <div><kbd>Space</kbd>All stop</div>
         <div><kbd>Q / E</kbd>Roll</div>
-        <div><kbd>W</kbd>Main drive</div>
-        <div><kbd>S</kbd>Retro thrusters</div>
+        <div><kbd>Q / E</kbd>Roll</div>
+        <div><kbd>Tab / T</kbd>Cycle target</div>
         <div><kbd>A / D</kbd>Translate left / right</div>
         <div><kbd>R / F</kbd>Translate up / down</div>
-        <div><kbd>Z</kbd>Drive lock (hands-free burn)</div>
-        <div><kbd>, / .</kbd>Drive power down / up</div>
-        <div><kbd>Space</kbd>Kill velocity vs reference</div>
-        <div><kbd>Tab / T</kbd>Cycle target</div>
+        <div><kbd>, / .</kbd>Drive power (ORBITAL)</div>
+        <div><kbd>Z</kbd>Drive lock (ORBITAL)</div>
         <div><kbd>N</kbd>Engage / abort autopilot</div>
         <div><kbd>1 2 3</kbd>Autopilot 1g / 3g / 10g</div>
         <div><kbd>C</kbd>Cycle attitude hold</div>
@@ -340,11 +432,13 @@ export class Hud {
         <div><kbd>H</kbd>Close this</div>
       </div>
       <p class="hint" style="text-align:left;margin-top:14px">
-        Everything is at true scale. NORMAL mode stops the drive at 0.1 c, where
-        Newtonian mechanics is still accurate to better than one percent.
-        OVERRIDE exceeds light speed and is the one deliberate break with physics;
-        time warp is not — it replays the same physics faster, and backs off on
-        its own near a gravity well so the integration stays honest.
+        <strong>PILOT</strong> (default) commands velocity: the drive holds you
+        against gravity so you can fly straight at things and stop next to them.
+        <strong>ORBITAL</strong> is the Newtonian version, where thrust changes
+        your orbit and you manage the consequences — press ORBIT HERE to drop
+        into a real circular orbit around whatever you are near.
+        Either way the solar system itself is unchanged: real positions, real
+        sizes, real light. Everything at true scale.
       </p>`;
   }
 
@@ -387,6 +481,36 @@ export class Hud {
     this.field('mode').textContent = ship.mode === 'override'
       ? `OVERRIDE ${overrideStage}c`
       : 'NORMAL';
+
+    // --- Throttle and flight model ---
+    const ceiling = PilotDrive.ceiling(ship.mode, ship.overrideStage, world.nearest.altitude);
+    const fraction = world.flightModel === 'pilot'
+      ? world.pilot.throttleFraction(ceiling)
+      : ship.currentAccel / Math.max(1e-6, ship.maxAccel);
+    (this.field('throttleFill') as HTMLElement).style.width =
+      `${Math.max(0, Math.min(1, world.flyby.active ? world.flyby.progress : fraction)) * 100}%`;
+    this.field('throttleLabel').textContent = world.flyby.active
+      ? `FLYPAST — ${Math.round(world.flyby.progress * 100)}% · ESC to take over`
+      : world.flightModel === 'pilot'
+      ? (world.pilot.cruiseSpeed > 0
+        ? `SET ${formatSpeed(world.pilot.cruiseSpeed)} — W faster · S slower`
+        : 'STATION KEEPING — W to move')
+      : 'ORBITAL — W main drive · S retro';
+    this.buttons.get('modelPilot')!.classList.toggle('on', world.flightModel === 'pilot');
+    this.buttons.get('modelOrbital')!.classList.toggle('on', world.flightModel === 'orbital');
+
+    // --- Sightseeing route ---
+    const flyby = world.flyby;
+    this.field('flybyStatus').textContent = flyby.active
+      ? flyby.route?.blurb ?? ''
+      : (flyby.message || 'Pick a flypast — the ship flies it for you.');
+    (this.field('flybyFill') as HTMLElement).style.width =
+      `${(flyby.active ? flyby.progress : 0) * 100}%`;
+    this.buttons.get('flybyCancel')!.style.display = flyby.active ? '' : 'none';
+    for (const route of FLYBY_ROUTES) {
+      this.buttons.get(`flyby_${route.id}`)!.classList.toggle(
+        'on', flyby.active && flyby.route?.id === route.id);
+    }
     this.field('reference').textContent = getBody(world.referenceId).name.toUpperCase();
     this.field('altitude').textContent = formatDistance(world.nearest.altitude);
     this.field('gload').textContent = `${(ship.currentAccel / G0).toFixed(2)} g`;
@@ -463,9 +587,11 @@ export class Hud {
     }
 
     const hint = this.field('mousehint');
-    hint.textContent = pointerLocked
-      ? 'ESC — release the mouse to use the console'
-      : 'Click the view to fly';
+    hint.textContent = world.flyby.active
+      ? 'ESC — take back control'
+      : pointerLocked
+        ? 'ESC — release the mouse to use the console'
+        : 'Click the view to fly';
     hint.className = pointerLocked ? 'locked' : '';
 
     this.updateWarnings(world);

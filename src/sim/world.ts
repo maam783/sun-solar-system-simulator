@@ -15,18 +15,21 @@ import { Ship, emptyCommand, type ShipCommand } from './ship';
 import { WarpController } from './warp';
 import { Autopilot } from './autopilot';
 import { HohmannTransfer } from './hohmann';
+import { PilotDrive } from './pilot';
+import { FlybyDirector, type FlybyRoute } from './flyby';
 import {
-  selectActiveBodies, dominantBody, nearestSurface, type ActiveBody, type DominantBody,
+  selectActiveBodies, dominantBody, nearestSurface, gravityAccel,
+  type ActiveBody, type DominantBody,
 } from './gravity';
 import { integrate, substepBound, type CollisionEvent } from './integrator';
 import {
   holdDirection, killRelativeVelocityThrust, timeToImpact, type AttitudeHold,
 } from './flightassist';
-import { iauOrientation, syncOrientation } from './frames';
+import { iauOrientation, syncOrientation, bodyNorthPole } from './frames';
 import { stateToElements, type OrbitElements } from './kepler';
 import { mat3, type Mat3 } from '../math/mat3d';
 import type { Vec3 } from '../math/vec3d';
-import { copy, len, sub, vec } from '../math/vec3d';
+import { addScaled, copy, cross, len, normalize, sub, vec } from '../math/vec3d';
 
 export interface BodyRenderState {
   id: string;
@@ -51,6 +54,18 @@ const holdDir = vec();
 const relTmp = vec();
 const posTmp = vec();
 const velTmp = vec();
+const flybyPos = vec();
+const flybyVel = vec();
+const flybyLook = vec();
+const flybyUp = vec();
+const refPos = vec();
+const refVel = vec();
+const gLocal = vec();
+const noseDir = vec();
+const orbitRadial = vec();
+const orbitVel = vec();
+const orbitNormal = vec();
+const orbitTangent = vec();
 
 export class World {
   readonly clock = new SimClock();
@@ -58,6 +73,22 @@ export class World {
   readonly warp = new WarpController();
   readonly autopilot = new Autopilot();
   readonly hohmann = new HohmannTransfer();
+  readonly pilot = new PilotDrive();
+  readonly flyby = new FlybyDirector();
+
+  /**
+   * How the ship handles.
+   *
+   * 'pilot' commands velocity: point and go, holding station against gravity.
+   * 'orbital' is Newtonian - thrust changes velocity and the orbit is yours to
+   * manage. The world is identical either way; only the drive differs.
+   *
+   * The default is Newtonian, because that is what the simulation *is*; the
+   * interactive build opts into PILOT at startup. Leaving the default the
+   * other way round would quietly turn every headless physics test into a test
+   * of a hovering ship.
+   */
+  flightModel: 'pilot' | 'orbital' = 'orbital';
   readonly command: ShipCommand = emptyCommand();
 
   /** Body the HUD reports speed and orbit relative to. */
@@ -99,12 +130,16 @@ export class World {
     this.ship.spawnInOrbit('earth', 400_000, this.clock.t, getBody('earth').radius);
     this.autopilot.disengage();
     this.hohmann.disengage();
+    this.flyby.stop();
+    this.pilot.reset();
     this.warp.reset();
     this.hold = 'off';
     this.killRelVel = false;
     this.referenceId = 'earth';
     this.lastCollision = null;
     this.paused = false;
+    this.active.length = 0;
+    this.updateReferences();
   }
 
   respawn(): void {
@@ -129,6 +164,13 @@ export class World {
 
     const dt = Math.min(dtReal, INTEGRATOR.maxFrameDt);
     const t = this.clock.t;
+
+    // A sightseeing route flies the ship directly. It is a camera move, so it
+    // owns the state outright rather than steering toward it.
+    if (this.flyby.active) {
+      this.stepFlyby(dt, t);
+      return;
+    }
 
     // --- Attitude, on wall-clock time: the pilot's hands are not time-warped.
     this.updateAttitude(dt, t);
@@ -204,6 +246,81 @@ export class World {
     this.updateBodyStates();
   }
 
+  /** Fly a sightseeing route: position, velocity and gaze all come from it. */
+  private stepFlyby(dt: number, t: number): void {
+    const running = this.flyby.update(dt, t, flybyPos, flybyVel, flybyLook, flybyUp);
+    if (running) {
+      copy(this.ship.pos, flybyPos);
+      copy(this.ship.vel, flybyVel);
+      this.ship.pointAlong(flybyLook, flybyUp);
+    }
+    this.clock.advance(dt);
+    this.warp.reset();
+    this.updateReferences();
+    this.updateBodyStates();
+  }
+
+  /** Begin a sightseeing route, placing the ship at its opening frame. */
+  startFlyby(route: FlybyRoute): void {
+    this.autopilot.disengage();
+    this.hohmann.disengage();
+    this.killRelVel = false;
+    this.pilot.allStop();
+    this.warp.reset();
+    this.paused = false;
+    this.ship.destroyed = false;
+    this.flyby.start(route);
+    this.flyby.startPosition(this.clock.t, flybyPos, flybyVel);
+    this.ship.setState(flybyPos, flybyVel);
+    this.targetId = route.subject ?? route.body;
+    this.updateReferences();
+    this.updateBodyStates();
+  }
+
+  /**
+   * Put the ship into a circular orbit around whatever it is closest to.
+   *
+   * This used to launch a full-thrust transfer to the *navigation target*,
+   * which from low Earth orbit meant setting off for the Moon. What a pilot
+   * means by "orbit" is here, now, around this.
+   */
+  enterOrbit(): boolean {
+    const primary = this.dominant.id;
+    const body = getBody(primary);
+    const state = this.bodyState(primary);
+
+    sub(orbitRadial, this.ship.pos, state.pos);
+    const r = len(orbitRadial);
+    if (!Number.isFinite(r) || r < body.radiusCollide * 1.01) return false;
+
+    sub(orbitVel, this.ship.vel, state.vel);
+    cross(orbitNormal, orbitRadial, orbitVel);
+    if (len(orbitNormal) < r * 1e-3) {
+      // Barely moving relative to the body, so there is no orbit plane to
+      // preserve. Use the body's own equator, which is the natural choice.
+      bodyNorthPole(orbitNormal, primary, this.clock.t);
+    }
+    normalize(orbitNormal, orbitNormal);
+
+    cross(orbitTangent, orbitNormal, orbitRadial);
+    if (len(orbitTangent) < 1e-9) return false;
+    normalize(orbitTangent, orbitTangent);
+
+    const speed = Math.sqrt(body.mu / r);
+    copy(this.ship.vel, state.vel);
+    addScaled(this.ship.vel, this.ship.vel, orbitTangent, speed);
+
+    // An orbit is a coasting trajectory, so hand the ship back to Newton.
+    this.flightModel = 'orbital';
+    this.pilot.allStop();
+    this.autopilot.disengage();
+    this.hohmann.disengage();
+    this.killRelVel = false;
+    this.hold = 'prograde';
+    this.updateReferences();
+    return true;
+  }
+
   private updateAttitude(dt: number, t: number): void {
     const manualAllowed = this.warp.effective <= WARP.maxWithManualAttitude;
 
@@ -262,6 +379,17 @@ export class World {
         this.autopilot.command(pos, vel, time, this.active, out);
         return;
       }
+      if (this.flightModel === 'pilot') {
+        ephemeris.frameState(this.referenceId, time, refPos, refVel);
+        gravityAccel(gLocal, pos, time, ephemeris, this.active);
+        if (this.pilot.cruiseSpeed > 0) {
+          this.ship.nose(noseDir);
+          this.pilot.command(vel, noseDir, refVel, gLocal, out);
+        } else {
+          this.pilot.hold(vel, refVel, gLocal, out);
+        }
+        return;
+      }
       if (this.killRelVel) {
         // Uses the ship's live state rather than the substep state; the
         // difference over one substep is negligible and it keeps this cheap.
@@ -281,6 +409,13 @@ export class World {
 
   private updateReferences(): void {
     const t = this.clock.t;
+    // The force model is normally refreshed by step(), but references are also
+    // read straight after a respawn or a scripted placement, before any frame
+    // has run. An empty list would report the Sun as the dominant body no
+    // matter where the ship actually is.
+    if (this.active.length === 0) {
+      this.active = selectActiveBodies(ephemeris, this.ship.pos, t, this.active);
+    }
     this.dominant = dominantBody(this.ship.pos, t, ephemeris, this.active);
     this.nearest = nearestSurface(this.ship.pos, t, ephemeris, this.active);
     // The HUD follows whatever is pulling hardest, unless the pilot pinned it.

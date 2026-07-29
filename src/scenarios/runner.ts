@@ -18,6 +18,8 @@ import type { World } from '../sim/world';
 import type { SolarSystemRenderer } from '../render/scene';
 import type { InputController } from '../ui/input';
 import { planHohmann } from '../sim/hohmann';
+import { FLYBY_ROUTES } from '../sim/flyby';
+import { PilotDrive } from '../sim/pilot';
 import { stateToElements } from '../sim/kepler';
 import {
   add, addScaled, cross, len, normalize, scale, set, sub, vec, angleBetween, dot,
@@ -517,7 +519,172 @@ const noAssets: Scenario = {
   },
 };
 
+/**
+ * Every sightseeing route, flown end to end.
+ *
+ * What makes a flypast good is not that it terminates: it is that the subject
+ * stays in frame, the ship gets genuinely close, and it does not fly into
+ * anything. All three are checked, because all three are easy to break by
+ * nudging a waypoint.
+ */
+const flypasts: Scenario = {
+  id: 'flypasts',
+  description: 'all sightseeing routes keep their subject in frame and clear the surface',
+  simTimeout: 2000,
+  frameTimeout: 120_000,
+  setup(ctx) {
+    ctx.memory.index = 0;
+    ctx.memory.frames = 0;
+    ctx.memory.onScreen = 0;
+    ctx.memory.deaths = 0;
+    ctx.memory.minClearRadii = 99;
+    ctx.memory.maxSubjectDeg = 0;
+    ctx.world.startFlyby(FLYBY_ROUTES[0]!);
+  },
+  update(ctx) {
+    const world = ctx.world;
+    const route = world.flyby.route;
+    if (route && world.flyby.active) {
+      const subject = route.subject ?? route.body;
+      ctx.memory.frames = (ctx.memory.frames ?? 0) + 1;
+
+      const clearance = 1 + world.altitudeAbove(route.body) / getBody(route.body).radius;
+      ctx.memory.minClearRadii = Math.min(ctx.memory.minClearRadii!, clearance);
+      ctx.memory.maxSubjectDeg = Math.max(ctx.memory.maxSubjectDeg!,
+        ctx.renderer.apparentDiameterDeg(world, subject));
+
+      sub(scratchA, world.bodyState(subject).pos, world.ship.pos);
+      const projected = ctx.renderer.projectDirection(scratchA);
+      if (!projected.behind && Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1) {
+        ctx.memory.onScreen = (ctx.memory.onScreen ?? 0) + 1;
+      }
+      if (world.ship.destroyed) ctx.memory.deaths = (ctx.memory.deaths ?? 0) + 1;
+    }
+
+    if (!world.flyby.active) {
+      const next = FLYBY_ROUTES[(ctx.memory.index ?? 0) + 1];
+      ctx.memory.index = (ctx.memory.index ?? 0) + 1;
+      if (next) world.startFlyby(next);
+    }
+  },
+  isDone: (ctx) => (ctx.memory.index ?? 0) >= FLYBY_ROUTES.length,
+  finish(ctx) {
+    const { results, memory } = ctx;
+    results.expect('routes', memory.index === FLYBY_ROUTES.length, memory.index ?? 0);
+    results.expect('no_losses', (memory.deaths ?? 0) === 0, memory.deaths ?? 0);
+    // The subject must be in shot essentially all the time - that is the point.
+    const framing = (100 * (memory.onScreen ?? 0)) / Math.max(1, memory.frames ?? 1);
+    results.above('subject_in_frame_pct', framing, 97);
+    // Close enough to be a flypast, far enough to survive it.
+    results.below('closest_radii', memory.minClearRadii ?? 99, 1.3);
+    results.above('closest_radii_safe', memory.minClearRadii ?? 0, 1.02);
+    // At least one route has to fill the sky, or none of them are impressive.
+    results.above('biggest_subject_deg', memory.maxSubjectDeg ?? 0, 100);
+  },
+};
+
+/**
+ * "Orbit here" must mean here. It used to engage the interplanetary autopilot
+ * toward the navigation target, so pressing it in low Earth orbit set off for
+ * the Moon at full thrust.
+ */
+const orbitHere: Scenario = {
+  id: 'orbit-here',
+  description: 'ORBIT HERE circularises around the nearest body, not the target',
+  simTimeout: 8000,
+  setup(ctx) {
+    ctx.world.respawn();
+    // Warp so a full orbit fits in the frame budget; the point is whether the
+    // orbit persists, not how many frames it takes to watch it.
+    ctx.world.warp.requested = 400;
+    // Deliberately leave something far away selected.
+    ctx.world.targetId = 'saturn';
+    // Perturb the orbit so circularising has something to do.
+    ctx.world.ship.vel.x *= 1.04;
+    ctx.memory.ok = ctx.world.enterOrbit() ? 1 : 0;
+    ctx.memory.startAlt = ctx.world.altitudeAbove('earth');
+  },
+  isDone: (ctx) => ctx.simElapsed > 6000,
+  finish(ctx) {
+    const { world, results, memory } = ctx;
+    results.expect('engaged', memory.ok === 1, memory.ok ?? 0);
+    results.expect('stayed_at_earth', world.dominant.id === 'earth', world.dominant.id);
+    results.expect('no_autopilot', !world.autopilot.active, world.autopilot.phase);
+    results.expect('handed_to_newton', world.flightModel === 'orbital', world.flightModel);
+    const orbit = world.orbitInfo()!;
+    results.below('eccentricity', orbit.e, 1e-3);
+    // A full orbit later it is still the same orbit, and still coasting.
+    results.below('altitude_drift_m',
+      Math.abs(world.altitudeAbove('earth') - memory.startAlt!), 2000);
+    results.below('gload', world.ship.currentAccel / G0, 0.01);
+  },
+};
+
+/**
+ * The pilot drive must be forgiving: it holds station on its own, and it will
+ * not offer a speed it could not stop from before hitting what it is near.
+ */
+const pilotMode: Scenario = {
+  id: 'pilot-mode',
+  description: 'PILOT holds station and keeps its own speed survivable',
+  simTimeout: 4000,
+  setup(ctx) {
+    ctx.world.respawn();
+    ctx.world.flightModel = 'pilot';
+    ctx.world.pilot.allStop();
+    ctx.memory.peakG = 0;
+  },
+  update(ctx) {
+    const world = ctx.world;
+    ctx.memory.peakG = Math.max(ctx.memory.peakG ?? 0, world.ship.currentAccel / G0);
+    // After the first stretch of station keeping, dive straight at the planet
+    // with the throttle wide open and see whether it stays survivable.
+    if (ctx.simElapsed > 60 && !ctx.memory.diving) {
+      ctx.memory.diving = 1;
+      ctx.memory.holdAlt = world.altitudeAbove('earth');
+      sub(scratchA, world.bodyState('earth').pos, world.ship.pos);
+      world.ship.pointAt(scratchA);
+    }
+    if (ctx.memory.diving) {
+      const ceiling = PilotDrive.ceiling(
+        world.ship.mode, world.ship.overrideStage, world.nearest.altitude);
+      world.pilot.throttle(1, 1 / 60, ceiling);
+      if (world.pilot.cruiseSpeed > ceiling) world.pilot.setCruise(ceiling, ceiling);
+      // Warning time is only meaningful while there is somewhere to go. The
+      // last kilometre is deliberately slow and close - approaching a surface
+      // is allowed, it just cannot be done fast.
+      if (world.nearest.altitude > 10_000) {
+        ctx.memory.minImpact = Math.min(ctx.memory.minImpact ?? 1e9, world.timeToImpact());
+      }
+      ctx.memory.lowSpeed = world.ship.currentAccel >= 0
+        ? Math.max(ctx.memory.lowSpeed ?? 0,
+          world.nearest.altitude < 50_000 ? world.autopilot.relSpeedToBody : 0)
+        : 0;
+    }
+  },
+  isDone: (ctx) => ctx.simElapsed > 240 || ctx.world.ship.destroyed,
+  finish(ctx) {
+    const { world, results, memory } = ctx;
+    // Station keeping means station keeping: a full minute without touching
+    // anything must not have moved the ship relative to Earth.
+    results.below('station_drift_m',
+      Math.abs((memory.holdAlt ?? 0) - 400_000), 50);
+    // Diving at a planet at full throttle still leaves time to react.
+    results.above('warning_seconds', memory.minImpact ?? 0, 4);
+    // And the crew is never asked for more than the drive's rated load.
+    results.below('peak_g', memory.peakG ?? 0, PilotDrive.maxAccel / G0 + 1);
+    // The property that makes PILOT forgiving: three minutes of holding the
+    // throttle open straight at a planet cannot produce a fast impact. Either
+    // the ship is still flying, or it arrived gently.
+    const impact = world.ship.destroyed ? world.ship.impactSpeed : 0;
+    results.below('impact_speed_ms', impact, 300);
+  },
+};
+
 export const SCENARIOS: Scenario[] = [
+  flypasts,
+  orbitHere,
+  pilotMode,
   bootScenario,
   angularSizes,
   leoOrbit,
@@ -535,9 +702,9 @@ export const SCENARIOS: Scenario[] = [
 
 /** The acceptance tour: one flight through everything that matters. */
 export const TOUR = [
-  'angular-sizes', 'leo-orbit', 'moon-direct', 'mars-direct',
-  'jupiter-slingshot', 'saturn-direct', 'sun-approach', 'collision',
-  'hohmann-mars', 'override', 'no-assets',
+  'angular-sizes', 'leo-orbit', 'orbit-here', 'pilot-mode', 'flypasts',
+  'moon-direct', 'mars-direct', 'jupiter-slingshot', 'saturn-direct',
+  'sun-approach', 'collision', 'hohmann-mars', 'override', 'no-assets',
 ];
 
 // ---------------------------------------------------------------------------
@@ -659,6 +826,12 @@ export class ScenarioRunner {
       return;
     }
 
+    // Scenarios exercise the Newtonian model. The interactive build flies in
+    // PILOT mode, where the drive holds the ship against gravity - a ship that
+    // hovers instead of orbiting would pass nothing here.
+    this.world.flightModel = 'orbital';
+    this.world.pilot.allStop();
+    this.world.flyby.stop();
     this.world.respawn();
     this.ctx.input.clear();
     try {

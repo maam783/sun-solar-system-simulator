@@ -40,6 +40,11 @@
     letter-spacing: 0.03em;
   }
 
+  @media (max-height: 780px) {
+    #nav { top: auto; bottom: 190px; }
+    #timepanel { bottom: 12px; }
+  }
+
   .panel {
     position: absolute;
     background: var(--panel-bg);
@@ -66,10 +71,40 @@
   .big { font-size: 21px; line-height: 1.15; color: var(--hud-bright); font-variant-numeric: tabular-nums; }
   .sub { font-size: 11px; color: var(--hud-dim); }
 
-  #flight { top: 12px; left: 12px; min-width: 232px; }
-  #nav { top: 12px; right: 12px; min-width: 246px; }
+  #flight { top: 12px; left: 12px; min-width: 236px; }
+  #sights { top: 12px; right: 12px; width: 262px; }
+  #nav { top: 296px; right: 12px; width: 262px; }
   #console { bottom: 12px; left: 12px; min-width: 300px; }
-  #timepanel { bottom: 12px; right: 12px; min-width: 232px; }
+  #timepanel { bottom: 12px; right: 12px; width: 262px; }
+
+  /* Engineering readouts stay out of the way until asked for. */
+  #hud:not(.advanced) .adv { display: none !important; }
+  #hud:not(.advanced) #console .row,
+  #hud:not(.advanced) #console h2 { display: none; }
+  #hud.advanced #nav { top: 296px; }
+
+  /* Throttle / progress bars */
+  .bar {
+    height: 4px;
+    background: rgba(127, 233, 200, 0.14);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 6px 0 3px;
+  }
+  .bar .fill {
+    height: 100%;
+    width: 0;
+    background: var(--hud);
+    transition: width 0.12s linear;
+  }
+  .bar .fill.warn { background: var(--warn); }
+
+  button.wide {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin-top: 4px;
+  }
 
   button {
     font-family: var(--mono);

@@ -133,6 +133,17 @@ export class Ship {
     quatIntegrate(this.attitude, this.angularVel.x, this.angularVel.y, this.angularVel.z, dtReal);
   }
 
+  /**
+   * Rotate the nose by an exact amount, in radians about the body axes.
+   * Used by PILOT mode, where the mouse points the ship rather than spinning
+   * it, so releasing the mouse leaves the view exactly where it was left.
+   */
+  aim(pitch: number, yaw: number, roll: number): void {
+    if (pitch === 0 && yaw === 0 && roll === 0) return;
+    quatIntegrate(this.attitude, pitch, yaw, roll, 1);
+    set(this.angularVel, 0, 0, 0);
+  }
+
   /** Zero the rotation rate outright (the pilot's "stop tumbling" button). */
   killRotation(): void {
     set(this.angularVel, 0, 0, 0);
@@ -205,6 +216,15 @@ export class Ship {
         scale(this.vel, this.vel, SPEED.normalCap / speed);
       }
     }
+  }
+
+  /** Aim the nose along a direction with an explicit roll reference. */
+  pointAlong(dir: Vec3, up: Vec3): void {
+    normalize(tmpA, dir);
+    copy(tmpB, up);
+    if (Math.abs(dot(tmpA, tmpB)) > 0.999) set(tmpB, 0, 0, 1);
+    if (Math.abs(dot(tmpA, tmpB)) > 0.999) set(tmpB, 0, 1, 0);
+    quatLookAlong(this.attitude, tmpA, tmpB);
   }
 
   /** Aim the nose along a world direction, keeping roll sane. */

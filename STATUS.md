@@ -3,7 +3,7 @@
 Every milestone below is checked with the command or URL that proved it, so the
 work can be picked up cold.
 
-Last full verification: 2026-07-29.
+Last full verification: 2026-07-30.
 
 ## Milestones
 
@@ -69,7 +69,7 @@ Last full verification: 2026-07-29.
 
 - [x] `npm run verify` exits 0 — 102 unit tests across 4 files.
 - [x] `npm run build` exits 0.
-- [x] `?scenario=tour` → `[SCEN] name=SUMMARY status=PASS ran=11 failed=0`.
+- [x] `?scenario=tour` → `[SCEN] name=SUMMARY status=PASS ran=14 failed=0`.
 - [x] Zero `console.error` on a clean load; only `[ASSETS]`-prefixed warnings
       for the moons that have no downloadable texture.
 - [x] Frame cost measured at 0.22 ms (0.046 ms simulation + 0.035 ms render
@@ -113,6 +113,34 @@ and each was invisible in a screenshot:
    instead of 25.19°. Caught by testing obliquity against the orbit normal
    rather than the ecliptic.
 
+## Follow-up round: making it a ship rather than a console
+
+The first build was accurate and unpleasant to fly. Every nudge rewrote the
+orbit, so the pilot spent the trip managing consequences instead of looking out
+of the window — realistic in the sense of a physics console, not in the sense of
+"what would this look like out of the window".
+
+- **PILOT flight model** is now the default: the drive commands velocity and
+  cancels local gravity, so pointing and going works and letting go parks you.
+  Acceleration is capped at 5000 g and the cruise ceiling is tied to the
+  clearance ahead (`min(sqrt(a·room), room/8)`), so the ship cannot build a
+  speed it could not stop from. ORBITAL is the old Newtonian model, opt-in.
+- **Six sightseeing routes**, each a spline through waypoints given in a scenic
+  frame anchored to the body (toward the subject, along its pole, across), so a
+  route reads as a description of a shot and comes out right at any date.
+- **ORBIT HERE fixed.** It engaged the interplanetary autopilot toward the
+  *navigation target*, so pressing it in low Earth orbit set off for the Moon at
+  full thrust. It now circularises around the nearest body.
+- **HUD split.** Flight, sights, navigation and time by default; the orbital
+  elements, rocket-equation panel and attitude holds sit behind ENGINEERING.
+- Three new scenarios (`flypasts`, `orbit-here`, `pilot-mode`) keep all of it
+  honest — 14 in the tour now.
+
+One defect the tests caught during this round: `flightModel` defaulted to
+`pilot` in `World`, which silently turned every headless physics test into a
+test of a hovering ship. The physics layer now defaults to Newtonian and the
+interactive build opts in.
+
 ## Known approximations
 
 Deliberate, and documented where they live:
@@ -127,3 +155,9 @@ Deliberate, and documented where they live:
   they were seen to be.
 - Above 100× warp, manual attitude input is ignored; the autopilot and hold
   modes set attitude directly.
+- Sightseeing routes fly the ship kinematically rather than steering it onto a
+  path. They are camera moves; a guidance loop that mostly got there would only
+  make the framing worse.
+- A close pass at true scale is genuinely fast: crossing Saturn in under a
+  minute means thousands of km/s. The speed readout during a flypast is real,
+  and large.

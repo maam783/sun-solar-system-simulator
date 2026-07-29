@@ -20,8 +20,27 @@ Then open <http://localhost:5173>. Click the window to capture the mouse for
 flying, **Esc** to hand the cursor back to the console, and **H** for the full
 control list.
 
-You start in a 400 km circular orbit over the daylight side of Earth, on today's
-actual date, with the planets where they actually are.
+You start in a 400 km orbit over the daylight side of Earth, on today's actual
+date, with the planets where they actually are.
+
+## Two ways to use it
+
+**Click a flypast.** The *Sights* panel has six of them — through Saturn's
+rings, over Jupiter's cloud tops at 1.04 radii, Earthrise from behind the lunar
+limb, Io with Jupiter filling twenty degrees of sky, three and a half radii off
+the Sun, a low pass across Mars. Each is a camera move about a minute long; the
+ship flies it and points itself at the subject. Nothing to pilot.
+
+**Or fly it yourself.** Flying is four keys: point with the mouse, **W** faster,
+**S** slower, **Space** to stop. The ship holds itself against gravity, so
+letting go of everything leaves you parked next to whatever you were looking at,
+and it will not offer a speed it could not stop from before hitting what it is
+near. That is *PILOT* mode, and it is the default.
+
+*ORBITAL* mode is the other one: Newtonian, thrust changes your orbit, and
+managing the consequences is the game. **ORBIT HERE** drops you into a real
+circular orbit around whatever you are closest to. Both modes fly through the
+same solar system — the difference is the drive, not the physics of the world.
 
 ## What is simulated properly
 
@@ -47,10 +66,15 @@ actual date, with the planets where they actually are.
 - **Stars.** 8,920 real stars from the HYG catalogue down to magnitude 7. The
   constellations out of the window are the real ones, seen from where you are.
 
-## The three deliberate exceptions
+## The deliberate exceptions
 
 Everything above is real. These are not, and the simulator says so:
 
+0. **The PILOT drive commands velocity, not acceleration.** Point, pick a speed,
+   and the ship goes — cancelling local gravity as it does. A real ship is a
+   projectile with a small engine, which is why flying one is mostly consequence
+   management. This is the trade that makes the thing a spaceship rather than a
+   physics console. ORBITAL mode gives it back.
 1. **Unlimited propellant.** The drive never runs out. The console shows the mass
    ratio a real rocket would have needed for the Δv you have spent so far — for a
    3 g run to Mars, a chemical rocket would need a mass ratio of about 10^275.
@@ -115,7 +139,7 @@ full simulated year against the analytic two-body solution, which it matches to
 one part in 10¹¹ in energy.
 
 The simulator also checks itself in the browser. Load `?scenario=tour` and it
-flies eleven scripted flights and prints machine-readable results:
+flies fourteen scripted flights and prints machine-readable results:
 
 ```
 [SCEN] name=angular-sizes  status=PASS sun_deg=0.5249 moon_deg=0.4904 earth_deg=140.4
@@ -123,7 +147,15 @@ flies eleven scripted flights and prints machine-readable results:
 [SCEN] name=mars-direct    status=PASS dist_err_pct=2.1e-6 station_ms=0.21 t_sim_h=58.6
 [SCEN] name=jupiter-slingshot status=PASS vinf_ratio_err_pct=0.045 turn_err_pct=0.006 helio_gain_kms=8.59
 [SCEN] name=hohmann-mars   status=PASS dv1_ms=2944.7 dv2_ms=2648.9 tof_days=258.9 phase_deg=44.34
+[SCEN] name=flypasts       status=PASS routes=6 subject_in_frame_pct=99.8 closest_radii=1.04
+[SCEN] name=orbit-here     status=PASS eccentricity=1.6e-7 altitude_drift_m=0.59 gload=0
+[SCEN] name=pilot-mode     status=PASS station_drift_m=5.8 warning_seconds=6.5 impact_speed_ms=125
 ```
+
+The last three cover the parts a physics test cannot: that every flypast keeps
+its subject in frame and clears the surface, that "orbit here" means *here*, and
+that holding the throttle open straight at a planet for three minutes cannot
+produce a fast impact.
 
 The slingshot one is the nicest: it confirms that a Jupiter encounter is elastic
 in Jupiter's frame — the ship leaves with the speed it arrived with, to within
@@ -138,14 +170,14 @@ comma-separated list.
 
 | | |
 |---|---|
-| Mouse | Pitch / yaw (click to capture; drag also works) |
-| **Esc** | **Release the mouse, so the console can be clicked** |
+| Mouse | Point the nose (click to capture; drag also works) |
+| **W / S** | **Faster / slower** |
+| **Space** | **All stop** |
+| **Esc** | **Release the mouse, or take back control from a flypast** |
 | Q / E | Roll |
-| W / S | Main drive / retro thrusters |
 | A D R F | Translate left, right, up, down |
-| Z | Drive lock, for a hands-free burn |
-| , / . | Drive power down / up (0.1 g – 100 g) |
-| Space | Kill velocity relative to the reference body |
+| Z | Drive lock (ORBITAL) |
+| , / . | Drive power down / up (ORBITAL, 0.1 g – 100 g) |
 | Tab / T | Cycle target |
 | N | Engage / abort autopilot |
 | 1 2 3 | Autopilot at 1 g / 3 g / 10 g |
