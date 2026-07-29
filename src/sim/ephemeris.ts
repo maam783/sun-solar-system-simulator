@@ -141,8 +141,17 @@ export const moonGeocentric = (t: number, out: Vec3): Vec3 => {
 
 // ---------------------------------------------------------------------------
 
-const scratchPos = vec();
-const scratchVel = vec();
+// Scratch vectors are deliberately split by owner. Sharing one pool across
+// computeState and the position()/velocity() wrappers aliased Earth's output
+// velocity onto the lunar series' workspace, which silently poisoned the
+// cached value for every later reader.
+const discardPos = vec();
+const discardVel = vec();
+const planetBack = vec();
+const planetFwd = vec();
+const planetVelDiscard = vec();
+const moonSampleBack = vec();
+const moonSampleFwd = vec();
 const moonA = vec();
 const moonB = vec();
 const relPos = vec();
@@ -203,12 +212,12 @@ export class Ephemeris {
   }
 
   position(id: string, t: number, out: Vec3): Vec3 {
-    this.state(id, t, out, scratchVel);
+    this.state(id, t, out, discardVel);
     return out;
   }
 
   velocity(id: string, t: number, out: Vec3): Vec3 {
-    this.state(id, t, scratchPos, out);
+    this.state(id, t, discardPos, out);
     return out;
   }
 
@@ -282,7 +291,28 @@ export class Ephemeris {
     throw new Error(`no ephemeris for body: ${id}`);
   }
 
+  /**
+   * Planet velocity, as the exact derivative of the modelled position.
+   *
+   * The elements themselves drift with time — the semi-major axis, the
+   * eccentricity and above all the perihelion all move — so the two-body
+   * velocity of a frozen ellipse is not the derivative of the trajectory this
+   * model actually traces. The gap is small (a fraction of a m/s out of tens
+   * of km/s) but it is a genuine inconsistency, and it shows up as a ship
+   * spawned in "circular" orbit breathing in and out by 800 m every
+   * revolution. Central-differencing the position removes it entirely, and
+   * three Kepler solves instead of one is not worth optimising away.
+   */
   private planetState(id: string, t: number, outPos: Vec3, outVel: Vec3): void {
+    const h = 60;
+    this.planetPosition(id, t, outPos);
+    this.planetPosition(id, t - h, planetBack);
+    this.planetPosition(id, t + h, planetFwd);
+    sub(outVel, planetFwd, planetBack);
+    scale(outVel, outVel, 1 / (2 * h));
+  }
+
+  private planetPosition(id: string, t: number, outPos: Vec3): void {
     const el = PLANET_ELEMENTS_BY_ID.get(id);
     if (!el) throw new Error(`no planet elements for ${id}`);
     const T = t / JULIAN_CENTURY;
@@ -305,7 +335,7 @@ export class Ephemeris {
       },
       getBody('sun').mu,
       outPos,
-      outVel,
+      planetVelDiscard,
     );
   }
 
@@ -317,9 +347,9 @@ export class Ephemeris {
   private moonRelativeState(t: number, outPos: Vec3, outVel: Vec3): void {
     const h = 120;
     moonGeocentric(t, outPos);
-    moonGeocentric(t - h, scratchPos);
-    moonGeocentric(t + h, scratchVel);
-    sub(outVel, scratchVel, scratchPos);
+    moonGeocentric(t - h, moonSampleBack);
+    moonGeocentric(t + h, moonSampleFwd);
+    sub(outVel, moonSampleFwd, moonSampleBack);
     scale(outVel, outVel, 1 / (2 * h));
   }
 
@@ -338,6 +368,10 @@ export class Ephemeris {
     this.frameValid = true;
     const half = t0 + dt / 2;
     const end = t0 + dt;
+
+    // Anything not sampled this frame must fall through to the exact solver,
+    // otherwise it would be interpolated from a previous frame's samples.
+    for (const s of this.samples.values()) s.needsExact = true;
 
     for (const id of activeIds) {
       const s = this.samples.get(id);
@@ -391,7 +425,7 @@ export class Ephemeris {
   }
 
   framePosition(id: string, t: number, out: Vec3): Vec3 {
-    this.frameState(id, t, out, scratchVel);
+    this.frameState(id, t, out, discardVel);
     return out;
   }
 }
