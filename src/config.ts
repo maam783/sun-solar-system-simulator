@@ -103,7 +103,7 @@ export const AUTOPILOT = {
 
 export const RENDER = {
   /** Vertical field of view, degrees. */
-  fov: 60,
+  fov: 60 as number,
   fovMin: 20,
   fovMax: 100,
   near: 1,

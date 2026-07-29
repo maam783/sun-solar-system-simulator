@@ -14,6 +14,7 @@ import { ephemeris } from './ephemeris';
 import { Ship, emptyCommand, type ShipCommand } from './ship';
 import { WarpController } from './warp';
 import { Autopilot } from './autopilot';
+import { HohmannTransfer } from './hohmann';
 import {
   selectActiveBodies, dominantBody, nearestSurface, type ActiveBody, type DominantBody,
 } from './gravity';
@@ -56,6 +57,7 @@ export class World {
   readonly ship = new Ship();
   readonly warp = new WarpController();
   readonly autopilot = new Autopilot();
+  readonly hohmann = new HohmannTransfer();
   readonly command: ShipCommand = emptyCommand();
 
   /** Body the HUD reports speed and orbit relative to. */
@@ -96,6 +98,7 @@ export class World {
     this.clock.reset(this.spawnTime);
     this.ship.spawnInOrbit('earth', 400_000, this.clock.t, getBody('earth').radius);
     this.autopilot.disengage();
+    this.hohmann.disengage();
     this.warp.reset();
     this.hold = 'off';
     this.killRelVel = false;
@@ -144,6 +147,9 @@ export class World {
         this.autopilot.phase === 'terminal' ? 'terminal-approach' : 'autopilot-burn',
       );
     }
+    if (this.hohmann.active) {
+      this.warp.constrain(this.hohmann.warpCeiling(), 'autopilot-burn');
+    }
 
     this.active = selectActiveBodies(ephemeris, this.ship.pos, t, this.active);
     const activeIds = this.active.map((b) => b.id);
@@ -189,6 +195,7 @@ export class World {
       this.lastCollision = result.collision;
       this.ship.markDestroyed(result.collision.bodyId, result.collision.speed);
       this.autopilot.disengage();
+      this.hohmann.disengage();
       this.warp.reset();
     }
 
@@ -199,6 +206,12 @@ export class World {
 
   private updateAttitude(dt: number, t: number): void {
     const manualAllowed = this.warp.effective <= WARP.maxWithManualAttitude;
+
+    if (this.hohmann.active) {
+      this.hohmann.command(this.ship.pos, this.ship.vel, t, holdDir);
+      if (len(holdDir) > 1e-6) this.ship.pointAt(holdDir);
+      return;
+    }
 
     if (this.autopilot.active && this.autopilot.phase !== 'arrived') {
       // Face the way the drive is pushing — this is what makes the mid-course
@@ -233,6 +246,18 @@ export class World {
    */
   private buildThrustCallback(_t0: number) {
     return (pos: Vec3, vel: Vec3, time: number, out: Vec3): void => {
+      if (this.hohmann.active) {
+        this.hohmann.command(pos, vel, time, out);
+        if (this.hohmann.readyForHandover) {
+          // The textbook solution lands the ship in the right orbit but not
+          // next to the planet, because the real orbits are neither circular
+          // nor coplanar. The direct autopilot closes the remaining gap.
+          const target = this.hohmann.targetId ?? this.targetId;
+          this.hohmann.disengage();
+          this.autopilot.engage(target, this.autopilot.accel, this.autopilot.speedCap);
+        }
+        return;
+      }
       if (this.autopilot.active) {
         this.autopilot.command(pos, vel, time, this.active, out);
         return;

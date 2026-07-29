@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sun — Solar System Flight Simulator</title>
+<style>
+  :root {
+    --hud: #7fe9c8;
+    --hud-dim: #4a8c7a;
+    --hud-bright: #d8fff2;
+    --warn: #ffb545;
+    --danger: #ff5a4a;
+    --panel-bg: rgba(4, 14, 12, 0.62);
+    --panel-border: rgba(127, 233, 200, 0.28);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: var(--mono);
+    color: var(--hud);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    font-size: 12px;
+    line-height: 1.5;
+    letter-spacing: 0.03em;
+  }
+
+  .panel {
+    position: absolute;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    padding: 8px 10px;
+    backdrop-filter: blur(3px);
+    pointer-events: auto;
+  }
+
+  .panel h2 {
+    margin: 0 0 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--hud-dim);
+    text-transform: uppercase;
+  }
+
+  .row { display: flex; justify-content: space-between; gap: 14px; white-space: nowrap; }
+  .row .k { color: var(--hud-dim); }
+  .row .v { color: var(--hud-bright); font-variant-numeric: tabular-nums; }
+
+  .big { font-size: 21px; line-height: 1.15; color: var(--hud-bright); font-variant-numeric: tabular-nums; }
+  .sub { font-size: 11px; color: var(--hud-dim); }
+
+  #flight { top: 12px; left: 12px; min-width: 232px; }
+  #nav { top: 12px; right: 12px; min-width: 246px; }
+  #console { bottom: 12px; left: 12px; min-width: 300px; }
+  #timepanel { bottom: 12px; right: 12px; min-width: 232px; }
+
+  button {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--hud);
+    background: rgba(127, 233, 200, 0.07);
+    border: 1px solid var(--panel-border);
+    border-radius: 2px;
+    padding: 3px 7px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  button:hover { background: rgba(127, 233, 200, 0.2); color: var(--hud-bright); }
+  button.on { background: var(--hud); color: #04120e; border-color: var(--hud); }
+  button:disabled { opacity: 0.35; cursor: default; }
+
+  .btns { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .sep { height: 1px; background: var(--panel-border); margin: 7px 0; }
+
+  select {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--hud-bright);
+    background: rgba(4, 20, 16, 0.9);
+    border: 1px solid var(--panel-border);
+    border-radius: 2px;
+    padding: 2px 4px;
+    width: 100%;
+  }
+
+  input[type=range] { width: 100%; accent-color: var(--hud); }
+
+  /* Reticle */
+  #reticle {
+    position: absolute; left: 50%; top: 50%;
+    width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    opacity: 0.5;
+  }
+  #reticle::before, #reticle::after {
+    content: ''; position: absolute; background: var(--hud);
+  }
+  #reticle::before { left: 50%; top: 0; width: 1px; height: 8px; }
+  #reticle::after { left: 50%; bottom: 0; width: 1px; height: 8px; }
+
+  #markers { position: absolute; inset: 0; }
+  .marker {
+    position: absolute;
+    width: 20px; height: 20px;
+    margin: -10px 0 0 -10px;
+    font-size: 9px;
+    color: var(--hud);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.85;
+  }
+  .marker.prograde { color: #8fe9ff; }
+  .marker.retrograde { color: #ff9a7a; }
+  .marker.target { color: var(--warn); }
+  .marker .glyph {
+    width: 14px; height: 14px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px;
+  }
+  .marker.square .glyph { border-radius: 1px; }
+  .marker .lbl {
+    position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; letter-spacing: 0.1em; white-space: nowrap; opacity: 0.8;
+  }
+
+  #warnings {
+    position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+    text-align: center; pointer-events: none;
+  }
+  .warn-line {
+    font-size: 13px; letter-spacing: 0.2em; font-weight: 600;
+    color: var(--warn); margin: 2px 0;
+    text-shadow: 0 0 12px rgba(255, 181, 69, 0.5);
+  }
+  .warn-line.danger { color: var(--danger); text-shadow: 0 0 12px rgba(255, 90, 74, 0.6); }
+  .blink { animation: blink 0.9s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  #overlay {
+    position: absolute; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.72);
+    pointer-events: auto;
+  }
+  #overlay.show { display: flex; }
+  #overlay .box {
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    padding: 26px 34px;
+    text-align: center;
+    max-width: 760px;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  #overlay h1 {
+    margin: 0 0 10px; font-size: 26px; letter-spacing: 0.28em; color: var(--danger);
+  }
+  #overlay.help h1 { color: var(--hud-bright); font-size: 17px; }
+  #overlay .box p { margin: 6px 0; color: var(--hud); }
+
+  .keys { text-align: left; column-count: 2; column-gap: 34px; margin-top: 12px; }
+  .keys div { break-inside: avoid; margin: 2px 0; white-space: nowrap; }
+  .keys kbd {
+    display: inline-block; min-width: 54px;
+    color: var(--hud-bright); border: 1px solid var(--panel-border);
+    border-radius: 2px; padding: 0 4px; margin-right: 8px;
+    font-size: 10px; text-align: center;
+  }
+
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #000; color: var(--hud); font-size: 13px; letter-spacing: 0.2em;
+  }
+  #loading.hide { display: none; }
+
+  .hint { color: var(--hud-dim); font-size: 10px; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="hud"></div>
+  <div id="loading">INITIALISING FLIGHT SYSTEMS…</div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
