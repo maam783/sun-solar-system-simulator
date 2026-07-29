@@ -125,6 +125,12 @@ const input = new InputController(canvas, {
     const i = HOLD_CYCLE.indexOf(world.hold);
     world.hold = HOLD_CYCLE[(i + 1) % HOLD_CYCLE.length]!;
   },
+  releaseMouse: () => {
+    // An overlay is the more urgent thing to dismiss; otherwise hand the
+    // cursor back so the console can be clicked.
+    if (hud.overlayShown) hud.hideOverlay();
+    else if (document.pointerLockElement) document.exitPointerLock();
+  },
 });
 
 renderer.loadTextures();
@@ -178,7 +184,7 @@ const frame = (now: number): void => {
   wasDestroyed = world.ship.destroyed;
 
   renderer.render(world);
-  hud.update(world, renderer, fps);
+  hud.update(world, renderer, fps, input.pointerLocked);
   scenario?.afterFrame();
 
   requestAnimationFrame(frame);

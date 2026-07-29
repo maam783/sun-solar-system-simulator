@@ -29,6 +29,7 @@ export interface InputActions {
   adjustFov: (delta: number) => void;
   adjustMaxAccel: (factor: number) => void;
   cycleHold: () => void;
+  releaseMouse: () => void;
 }
 
 const MOUSE_SENSITIVITY = 0.0022;
@@ -73,6 +74,13 @@ export class InputController {
       this.keys.add(code);
 
       switch (code) {
+        // Escape is how you get the mouse cursor back. The browser releases
+        // pointer lock on its own, but doing it explicitly also lets the same
+        // key dismiss an overlay, which is what people reach for first.
+        case 'Escape':
+          this.keys.delete(code);
+          this.actions.releaseMouse();
+          break;
         case 'Space': this.actions.killRelativeVelocity(); break;
         case 'Tab': this.actions.cycleTarget(event.shiftKey ? -1 : 1); break;
         case 'KeyT': this.actions.cycleTarget(event.shiftKey ? -1 : 1); break;

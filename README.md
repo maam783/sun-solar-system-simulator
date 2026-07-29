@@ -16,8 +16,9 @@ across and the ship is 50 m long. That ratio *is* the simulation.
 npm install && npm run dev
 ```
 
-Then open <http://localhost:5173>. Click the window to capture the mouse and
-press **H** for the controls.
+Then open <http://localhost:5173>. Click the window to capture the mouse for
+flying, **Esc** to hand the cursor back to the console, and **H** for the full
+control list.
 
 You start in a 400 km circular orbit over the daylight side of Earth, on today's
 actual date, with the planets where they actually are.
@@ -138,6 +139,7 @@ comma-separated list.
 | | |
 |---|---|
 | Mouse | Pitch / yaw (click to capture; drag also works) |
+| **Esc** | **Release the mouse, so the console can be clicked** |
 | Q / E | Roll |
 | W / S | Main drive / retro thrusters |
 | A D R F | Translate left, right, up, down |

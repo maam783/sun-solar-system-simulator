@@ -29,6 +29,10 @@ export interface SimApi {
   version: string;
   world: World;
   renderer: SolarSystemRenderer;
+  hud: Hud;
+  input: InputController;
+  /** Advance and redraw one frame without waiting for the animation loop. */
+  frame(dt?: number): void;
   getShip(): Record<string, unknown>;
   getBody(id: string): Record<string, unknown>;
   angularDiameterDeg(id: string): number;
@@ -63,6 +67,17 @@ export const installDebugApi = (ctx: DebugContext): SimApi => {
     version: '1.0.0',
     world,
     renderer,
+    hud: ctx.hud,
+    input: ctx.input,
+
+    // A browser suspends requestAnimationFrame entirely in a hidden tab, so a
+    // scripted check cannot rely on the animation loop having run. This drives
+    // one complete frame - simulation, render and console - on demand.
+    frame: (dt = 1 / 60) => {
+      world.step(dt);
+      renderer.render(world);
+      ctx.hud.update(world, renderer, ctx.getFps(), ctx.input.pointerLocked);
+    },
 
     getShip: () => ({
       pos: [world.ship.pos.x, world.ship.pos.y, world.ship.pos.z],

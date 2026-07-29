@@ -126,6 +126,7 @@ export class Hud {
     this.buildConsolePanel();
     this.buildTimePanel();
     this.buildWarnings();
+    this.buildMouseHint();
     this.buildOverlay();
   }
 
@@ -284,6 +285,18 @@ export class Hud {
     this.root.appendChild(this.warnings);
   }
 
+  /**
+   * The one piece of interface that has to explain itself: once the pointer is
+   * captured for flying, there is no visible cursor to click the console with,
+   * and nothing on screen says which key gives it back.
+   */
+  private buildMouseHint(): void {
+    const hint = el('div');
+    hint.id = 'mousehint';
+    this.root.appendChild(hint);
+    this.fields.set('mousehint', hint);
+  }
+
   private buildOverlay(): void {
     this.overlay = el('div');
     this.overlay.id = 'overlay';
@@ -304,6 +317,7 @@ export class Hud {
     this.overlayBody.innerHTML = `
       <div class="keys">
         <div><kbd>Mouse</kbd>Pitch / yaw (click to capture)</div>
+        <div><kbd>Esc</kbd>Release the mouse / close this</div>
         <div><kbd>Q / E</kbd>Roll</div>
         <div><kbd>W</kbd>Main drive</div>
         <div><kbd>S</kbd>Retro thrusters</div>
@@ -355,7 +369,12 @@ export class Hud {
 
   // -------------------------------------------------------------------------
 
-  update(world: World, renderer: SolarSystemRenderer, fps: number): void {
+  update(
+    world: World,
+    renderer: SolarSystemRenderer,
+    fps: number,
+    pointerLocked = false,
+  ): void {
     const ship = world.ship;
     const speed = world.referenceSpeed();
 
@@ -442,6 +461,12 @@ export class Hud {
     for (const hold of ['off', 'prograde', 'retrograde', 'target'] as AttitudeHold[]) {
       this.buttons.get(`hold_${hold}`)!.classList.toggle('on', world.hold === hold);
     }
+
+    const hint = this.field('mousehint');
+    hint.textContent = pointerLocked
+      ? 'ESC — release the mouse to use the console'
+      : 'Click the view to fly';
+    hint.className = pointerLocked ? 'locked' : '';
 
     this.updateWarnings(world);
     this.updateMarkers(world, renderer);
