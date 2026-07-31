@@ -439,3 +439,35 @@ closest approach, and that is not a compromise that can be tuned away — it is
 the same d / (d - 1). Close in, where the planet is a wall, an honest transit
 does not exist. The reference is behind the subject for 36-45% of these shots
 now, which is the other half of the trade.
+
+### Twelfth round — the ship braked when you came off the throttle
+
+Reported: the ship slows down when you let go of the throttle, which is not what
+happens in space.
+
+Correct, and it was the centre of the flight model rather than a detail. PILOT
+commanded *velocity*: the drive drove the ship's velocity to
+`referenceVel + cruiseSpeed * nose` at all times, so any speed above the setting
+was actively braked away. Measured from the spawn state: with the throttle set
+to 3,000 m/s the drive dragged the ship's 7,544 m/s orbital velocity down to
+exactly 3,000 and held it. A second mechanism did the same thing from the other
+side — the clearance ceiling was clamped onto the setting every frame, so
+closing on anything slowed the ship whether or not the pilot had asked.
+
+The drive now only acts while the pilot is asking:
+
+- **throttle open** — servo to the commanded speed along the nose, as before,
+  and the clearance ceiling caps what can be commanded;
+- **throttle closed** — coast. The only acceleration applied is the gravity
+  cancellation the mode is built on;
+- **ALL STOP** — station keeping, latched. It is also the state the ship spawns
+  in, so nothing changes about starting parked.
+
+Measured after the change: 98,020 m/s held to the last digit over 20 s of
+coasting, heading drift 0.00 deg, and 0.00 deg of course change while the ship
+was turned 80 deg off its heading — the view moves, the trajectory does not.
+
+One consequence worth stating: the "it will not offer a speed it could not stop
+from" guarantee now only holds while the throttle is open. Coast into a planet
+and the ship is destroyed, which is what the collision model and the respawn are
+for.

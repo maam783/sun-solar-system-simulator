@@ -210,9 +210,12 @@ const frame = (now: number): void => {
     const ceiling = PilotDrive.ceiling(
       world.ship.mode, world.ship.overrideStage, world.nearest.altitude);
     world.pilot.throttle(input.throttleAxis(), dtReal, ceiling);
-    // Coming up on something shrinks the ceiling; follow it down so the ship
-    // slows itself rather than waiting to be told.
-    if (world.pilot.cruiseSpeed > ceiling) world.pilot.setCruise(ceiling, ceiling);
+    // Coasting: the throttle reading follows the speed actually being flown, so
+    // that pushing it again carries on from there instead of snapping back to
+    // the last commanded figure.
+    if (!world.pilot.engaged && !world.pilot.stopping) {
+      world.pilot.syncTo(world.referenceSpeed());
+    }
   }
   world.command.throttle = command.throttle;
   world.command.rcsX = command.rcsX;

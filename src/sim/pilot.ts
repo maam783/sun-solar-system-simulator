@@ -65,17 +65,31 @@ export class PilotDrive {
   /** Commanded speed relative to the reference body, m/s. */
   cruiseSpeed = 0;
 
+  /** True while the pilot is actually asking for a change of speed. */
+  engaged = false;
+
+  /**
+   * Latched by ALL STOP, and by spawning. Station keeping is a thing the pilot
+   * asks for, not what happens by default when they stop asking for anything
+   * else — that distinction is the whole of the fix below.
+   */
+  stopping = true;
+
   /**
    * Move the throttle. `input` is -1 (slower) to +1 (faster), `dt` real
    * seconds. The setting ramps; the ship then chases the setting.
    */
   throttle(input: number, dt: number, ceiling: number): void {
+    this.engaged = input !== 0;
     if (input === 0) return;
+    this.stopping = false;
 
     if (input > 0) {
       this.cruiseSpeed = this.cruiseSpeed < MIN_CRUISE
         ? MIN_CRUISE
         : this.cruiseSpeed * Math.exp(RAMP_PER_SECOND * input * dt);
+      // Only while the pilot is asking. Letting the clearance drag the setting
+      // down at all times is what made the ship brake on its own.
       this.cruiseSpeed = Math.min(this.cruiseSpeed, ceiling);
     } else {
       this.cruiseSpeed *= Math.exp(RAMP_PER_SECOND * input * dt);
@@ -83,9 +97,22 @@ export class PilotDrive {
     }
   }
 
+  /**
+   * Keep the throttle setting honest while coasting.
+   *
+   * Nothing reads it to fly the ship in that state, but the pilot reads it, and
+   * pushing the throttle again should carry on from the speed actually being
+   * flown rather than from whatever was last commanded.
+   */
+  syncTo(speed: number): void {
+    this.cruiseSpeed = speed < MIN_CRUISE ? 0 : speed;
+  }
+
   /** Cut to a dead stop relative to the reference body. */
   allStop(): void {
     this.cruiseSpeed = 0;
+    this.stopping = true;
+    this.engaged = false;
   }
 
   setCruise(speed: number, ceiling: number): void {
@@ -145,9 +172,26 @@ export class PilotDrive {
   }
 
   /**
-   * Station-keeping only: hold position relative to the reference body without
-   * being asked to move. Used when the throttle is closed, so the ship parks
-   * rather than drifting.
+   * Off the throttle: coast.
+   *
+   * This used to hold station instead, and it was wrong. A velocity-commanded
+   * drive brakes to whatever it is told, so releasing the throttle made the
+   * ship shed speed on its own — from a 400 km orbit it would drag 7,544 m/s
+   * down to whatever the setting happened to be. Nothing in space does that.
+   * The engine is off, so the only thing applied here is the gravity
+   * cancellation the mode is built on, and the ship keeps the velocity it had.
+   *
+   * Turning now moves the view and not the course, which is also what a real
+   * ship does. Pushing the throttle again points the velocity where the nose
+   * is, and that is when it flies like an aircraft again — on request.
+   */
+  coast(gravity: Vec3, out: Vec3): void {
+    scale(out, gravity, -1);
+  }
+
+  /**
+   * Station-keeping: hold position relative to the reference body. Asked for
+   * with ALL STOP, and the state the ship spawns in.
    */
   hold(vel: Vec3, referenceVel: Vec3, gravity: Vec3, out: Vec3): void {
     sub(out, referenceVel, vel);
@@ -169,6 +213,8 @@ export class PilotDrive {
 
   reset(): void {
     this.cruiseSpeed = 0;
+    this.stopping = true;
+    this.engaged = false;
     set(tmp, 0, 0, 0);
     void len(tmp);
   }

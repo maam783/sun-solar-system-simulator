@@ -39,13 +39,16 @@ the speed readout goes superluminal during that one — the flypasts are camera
 moves on rails, not flights under the drive's 0.1 c ceiling.
 
 **Or fly it yourself.** Flying is four keys: point with the mouse, **W** faster,
-**S** slower, **Space** to stop. That is the whole of the simple view — one
-instrument panel and the list of sights. **FULL CONSOLE** unfolds the rest
-(navigation, time warp, orbital elements, the rocket-equation panel) for anyone
-who wants it. The ship holds itself against gravity, so
-letting go of everything leaves you parked next to whatever you were looking at,
-and it will not offer a speed it could not stop from before hitting what it is
-near. That is *PILOT* mode, and it is the default.
+**S** slower, **Space** to stop. That is the whole of the simple view — the list
+of sights and nothing else. **FULL CONSOLE** unfolds the rest (flight readouts,
+navigation, time warp, orbital elements, the rocket-equation panel) for anyone
+who wants it.
+
+Off the throttle the ship coasts. It keeps the speed and the heading it had, and
+turning moves the view rather than the course — push the throttle again and the
+velocity swings round to where the nose is pointing. **Space** is the only thing
+that stops you, and it parks you relative to whatever you are nearest, which is
+also how you start. That is *PILOT* mode, and it is the default.
 
 *ORBITAL* mode is the other one: Newtonian, thrust changes your orbit, and
 managing the consequences is the game. **ORBIT HERE** drops you into a real
@@ -80,11 +83,13 @@ same solar system — the difference is the drive, not the physics of the world.
 
 Everything above is real. These are not, and the simulator says so:
 
-0. **The PILOT drive commands velocity, not acceleration.** Point, pick a speed,
-   and the ship goes — cancelling local gravity as it does. A real ship is a
-   projectile with a small engine, which is why flying one is mostly consequence
-   management. This is the trade that makes the thing a spaceship rather than a
-   physics console. ORBITAL mode gives it back.
+0. **The PILOT drive cancels local gravity.** Point, open the throttle, and the
+   ship accelerates along the nose; close it and it coasts in a straight line
+   instead of falling. A real ship is a projectile with a small engine, which is
+   why flying one is mostly consequence management. Cancelling gravity is the
+   trade that makes this a spaceship rather than a physics console — but only
+   gravity is cancelled. Nothing slows you down on its own. ORBITAL mode gives
+   the falling back.
 1. **Unlimited propellant.** The drive never runs out. The console shows the mass
    ratio a real rocket would have needed for the Δv you have spent so far — for a
    3 g run to Mars, a chemical rocket would need a mass ratio of about 10^275.

@@ -388,11 +388,13 @@ export class World {
       if (this.flightModel === 'pilot') {
         ephemeris.frameState(this.referenceId, time, refPos, refVel);
         gravityAccel(gLocal, pos, time, ephemeris, this.active);
-        if (this.pilot.cruiseSpeed > 0) {
+        if (this.pilot.stopping) {
+          this.pilot.hold(vel, refVel, gLocal, out);
+        } else if (this.pilot.engaged && this.pilot.cruiseSpeed > 0) {
           this.ship.nose(noseDir);
           this.pilot.command(vel, noseDir, refVel, gLocal, out);
         } else {
-          this.pilot.hold(vel, refVel, gLocal, out);
+          this.pilot.coast(gLocal, out);
         }
         return;
       }
