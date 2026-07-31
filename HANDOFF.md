@@ -105,7 +105,11 @@ under 10% of each shot below 0.3 deg/s.
 
 `FlybyRoute.scaleReference` puts a to-scale body in orbit around the subject
 during a flypast. `FlybyDirector.planReference()` picks its radius, phase and
-inclination once at route start by scoring the whole shot. Do not go back to
+inclination once at route start by scoring the whole shot, strongly preferring a
+*transit* — the reference crossing the subject's lit face. Note the hard limit
+there: a transit magnifies the reference by at least d / (d - 1), so an honest
+one only exists while the subject spans roughly 20 degrees, never at closest
+approach. Do not try to tune that away. Do not go back to
 placing it relative to the camera: that was tried, and a prop held beside the
 window slides into the ship's path and its lighting jumps instead of evolving.
 The reference must also be *smaller* than the subject — Mars uses the Moon,

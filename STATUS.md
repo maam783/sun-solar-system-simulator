@@ -400,3 +400,42 @@ counted. (The first attempt measured a star sitting at the same screen position
 A crescent, dimmer than the planet, as it should be. The lights now contribute
 2.6 of mean luminance instead of roughly 73, and no longer clip. At 1 AU the
 scale factor is exactly 1, so nothing changes for the real Earth in Earth orbit.
+
+### Eleventh round — put the reference on the line of sight
+
+Asked for: the reference between the eye and the subject, crossing in front of
+it, because that is where the effect is strongest. Correct — a known object *on*
+the disc leaves nothing to argue about, and it is the transit-of-Venus
+photograph.
+
+The placement search now scores a transit five times a placement beside the
+limb, weighted by how much of the subject's visible face is in sunlight (a
+silhouette on the night side is black on black; a star has no phase).
+
+What it cost, and why it is bounded. To be in front of the subject the
+reference must be nearer by at least its own orbit radius, and that orbit has to
+clear the surface, so a transit magnifies the reference by at least d / (d - 1):
+**1.5x at three radii out, 1.14x at eight**. Unpriced, the search bought a
+transit showing Earth at 2.2x — Saturn would have read as four Earths across
+instead of nine, which is precisely the error a size reference must not make.
+Transits are now rewarded on a ramp that pays nothing below 1.5x and, below
+that, is *charged* rather than merely ignored, so a false transit cannot be
+picked up as a side effect of a placement chosen for other reasons (which is
+exactly what Saturn had been doing).
+
+| route | transit | oversize | lit face behind | subject spans | ship's closest pass |
+|---|---|---|---|---|---|
+| Jupiter | 23 s | 1.22x | 0.94 | 19.5 deg | 14.2 Earth radii |
+| Saturn | 25 s | 1.23x | 0.61 | 19.3 deg | 15.7 |
+| Sun | 25 s | 1.22x | emits | 20.3 deg | 111.7 |
+| Mars | none | — | — | — | 4.7 Moon radii |
+
+Mars cannot have one: the Moon is half of Mars, so it can never fit *inside*
+Mars's disc while also being in front of it. It keeps the placement beside the
+limb, at a range within 8% of Mars's own.
+
+The transit lands where the subject spans about 20 degrees rather than at
+closest approach, and that is not a compromise that can be tuned away — it is
+the same d / (d - 1). Close in, where the planet is a wall, an honest transit
+does not exist. The reference is behind the subject for 36-45% of these shots
+now, which is the other half of the trade.

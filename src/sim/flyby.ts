@@ -478,6 +478,7 @@ export class FlybyDirector {
     if (!refId) return;
 
     const body = getBody(route.body);
+    const isStar = body.kind === 'star';
     // Everything here is in body radii, which is what the scenic frame uses.
     const refRadii = getBody(refId).radius / body.radius;
     const halfFov = (((route.fov ?? 60) * Math.PI) / 180) / 2;
@@ -505,7 +506,6 @@ export class FlybyDirector {
         const rz = r * Math.sin(theta) * Math.sin(inc);
         let clearance = Infinity;
         let framed = 0;
-        let mismatch = 0;
         for (const p of track) {
           const dx = rx - p[0]!;
           const dy = ry - p[1]!;
@@ -517,18 +517,55 @@ export class FlybyDirector {
           const apart = Math.acos(Math.max(-1, Math.min(1, cos)));
           const subjectAngle = Math.asin(Math.min(1, 1 / toSubject));
           const refAngle = Math.asin(Math.min(1, refRadii / toRef));
-          // Visible either clear of the limb, or crossing the face in front of
-          // it — a transit is not a failure of the shot, it is the best version
-          // of it. Only being genuinely behind the subject loses the reference.
-          const visible = apart > subjectAngle + refAngle * 1.2 || toRef < toSubject - 1;
-          if (visible && apart < halfFov * 0.82) framed++;
-          mismatch += Math.abs(Math.log(toRef / toSubject));
+          // A transit is the shot. Something of known size *on* the disc, on
+          // the line between the eye and the subject, is a far stronger
+          // statement of scale than the same object parked beside it: there is
+          // nothing left to argue about, no chance the eye reads it as nearer
+          // or further. It is the transit-of-Venus photograph, and it is worth
+          // three times a placement off to one side.
+          //
+          // Only against a lit face, though. Silhouetted on the night side it
+          // is black on black, so the weight follows how much of the subject's
+          // visible face is in sunlight — which in this frame is just how far
+          // round the sunward axis the ship has come. A star has no phase.
+          const litFace = isStar ? 1 : (1 + p[0]! / toSubject) / 2;
+          // In front of the nearest point of the subject, and inside its disc.
+          const transiting = toRef < toSubject - 1 && apart < subjectAngle - refAngle;
+          const beside = apart > subjectAngle + refAngle * 1.2;
+          //
+          // A transit costs something, and it has to be charged for. To be in
+          // front the reference must be nearer than the subject by at least its
+          // own orbit radius, so it is magnified by d / (d - r): half again at
+          // three radii out, and worse closer in. That is the one error a size
+          // reference must not make, so a transit earns nothing once it is
+          // showing the reference more than about 1.4x oversize. Left unpriced
+          // the search cheerfully bought a transit at 2.2x.
+          const depth = toRef / toSubject;
+          if (apart < halfFov * 0.82) {
+            if (transiting) {
+              // Below the threshold this is not a weaker version of the shot,
+              // it is a false one — the reference is crossing the disc looking
+              // half again too big — so it is charged rather than merely
+              // unrewarded, or it gets bought as a side effect of a placement
+              // chosen for other reasons.
+              framed += depth > 0.6
+                ? 5 * litFace * Math.min(1, (depth - 0.6) / 0.15)
+                : -1;
+            } else if (beside) {
+              // Beside the subject it should be at the subject's own range, or
+              // it is answering a question nobody asked.
+              framed += 1 - Math.min(1, Math.abs(Math.log(depth)));
+            } else {
+              // In frame but behind the subject: the reference is simply gone.
+              framed -= 0.5;
+            }
+          }
         }
         // A clean miss is all that is wanted; the ship is fifty metres long.
         // Demanding more than this rules out the close orbits, and those are
         // the ones that keep the reference at the subject's own range.
         if (clearance < refRadii * 3) continue;
-        const score = framed / track.length - 0.5 * (mismatch / track.length);
+        const score = framed / track.length;
         if (score > best) {
           best = score;
           this.refRadius = r;
