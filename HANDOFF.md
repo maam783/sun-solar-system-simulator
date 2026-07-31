@@ -90,10 +90,23 @@ Next step the user asked for: research what actually triggers the sense of
 overwhelming scale in humans, and rebuild the routes around that rather than
 around guesses.
 
+## Why the routes are conics
+
+`hyperbolaStops()` generates the waypoints for every pass route. Do not replace
+them with hand-placed points: the failure mode is a leg that points at the
+body's centre, which turns the shot into a zoom (the line of sight does not
+rotate, so the stars freeze and only the disc grows). The pacing table in
+`start()` budgets time by limb motion across the sky — line-of-sight rotation
+plus change in angular radius — and not by distance flown, for the same reason.
+Measured medians are 1.9-3.9 deg/s of line-of-sight rotation per route, with
+under 10% of each shot below 0.3 deg/s.
+
 ## The one deliberate fiction in the scene
 
 `FlybyRoute.scaleReference` puts a to-scale Earth in frame beside the subject
-during a flypast, at the same camera range so the angular ratio is exact. It is
+during a flypast, at the same camera range so the angular ratio is exact. The
+reference must be *smaller* than the subject or it cannot be placed clear of it
+— Mars uses the Moon for that reason. It is
 rendered through the normal planet shader, so it is lit and oriented like a real
 body. Nothing else in the simulation is fabricated, and the sights panel says so
 whenever it is visible. Do not quietly extend this to other objects.

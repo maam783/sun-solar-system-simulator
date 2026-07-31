@@ -297,14 +297,13 @@ export class SolarSystemRenderer {
    * even though the object is not.
    */
   private buildScaleReference(): void {
-    const earth = getBody('earth');
     this.scaleRefMaterial = new THREE.ShaderMaterial({
       vertexShader: PLANET_VERT,
       fragmentShader: PLANET_FRAG,
       uniforms: {
         uSunPos: { value: new THREE.Vector3() },
         uCameraPosW: { value: new THREE.Vector3() },
-        uBaseColor: { value: new THREE.Color(earth.color) },
+        uBaseColor: { value: new THREE.Color(0xffffff) },
         uIrradiance: { value: 1 },
         uMap: { value: null },
         uHasMap: { value: false },
@@ -412,11 +411,6 @@ export class SolarSystemRenderer {
         view.material.uniforms.uHasMap!.value = true;
       });
     }
-
-    load('earth.jpg', (texture) => {
-      this.scaleRefMaterial.uniforms.uMap!.value = texture;
-      this.scaleRefMaterial.uniforms.uHasMap!.value = true;
-    });
 
     load('earth_night.jpg', (texture) => {
       const earth = this.views.get('earth');
@@ -755,6 +749,21 @@ export class SolarSystemRenderer {
       quatScratch[0]!, quatScratch[1]!, quatScratch[2]!, quatScratch[3]!);
 
     const u = this.scaleRefMaterial.uniforms;
+    // Borrow the real body's surface, so whichever body a route names as its
+    // yardstick looks like itself — and falls back to the same procedural
+    // surface if its texture never downloaded.
+    const source = this.views.get(refId);
+    if (source) {
+      const s = source.material.uniforms;
+      u.uMap!.value = s.uMap!.value;
+      u.uHasMap!.value = s.uHasMap!.value;
+      u.uNightMap!.value = s.uNightMap!.value;
+      u.uHasNight!.value = s.uHasNight!.value;
+      u.uBaseColor!.value.copy(s.uBaseColor!.value);
+      u.uIsGasGiant!.value = s.uIsGasGiant!.value;
+      u.uSeed!.value = s.uSeed!.value;
+      u.uRoughnessDetail!.value = s.uRoughnessDetail!.value;
+    }
     u.uSunPos!.value.copy(sunVector);
     u.uCameraPosW!.value.set(0, 0, 0);
     u.uIrradiance!.value = Math.min(6, solarIrradiance(len(state.pos)) / 1361);

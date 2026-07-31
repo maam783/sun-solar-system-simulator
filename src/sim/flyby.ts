@@ -66,6 +66,61 @@ export interface FlybyRoute {
   stops: FlybyStop[];
 }
 
+/**
+ * Waypoints taken from a real hyperbolic encounter.
+ *
+ * Hand-placed waypoints kept producing a straight run at the planet, and a
+ * straight run at anything is a zoom: the line of sight does not turn, so the
+ * stars behind it hold still, no new surface comes over the limb, and the only
+ * thing that changes in the whole frame is the size of the disc. The eye reads
+ * that as a picture being enlarged, not as flight — which is exactly what it
+ * geometrically is.
+ *
+ * A real encounter cannot do that. The incoming asymptote misses the centre by
+ * the impact parameter, so the body drifts across the star field the entire way
+ * in and its surface streams underneath at closest approach. Deriving the
+ * waypoints from the conic is both shorter than tuning them by hand and the
+ * reason the shot reads as flying rather than zooming.
+ *
+ * Angles are the true anomaly; offsets come out in body radii, which is what
+ * the scenic frame wants.
+ */
+function hyperbolaStops(opts: {
+  /** Closest approach, in body radii. */
+  periapsis: number;
+  /** > 1. Higher is a faster, straighter, less wrapped pass. */
+  eccentricity: number;
+  /** Where periapsis sits relative to +X (the lit side), degrees. */
+  argument: number;
+  /** Tilt of the orbital plane out of the scenic XY plane, degrees. */
+  inclination: number;
+  /** Radius at both ends of the arc, in body radii. */
+  entryRadius: number;
+  /** Total length of the shot; the arc-length table redistributes it. */
+  seconds: number;
+  samples?: number;
+}): FlybyStop[] {
+  const { periapsis: q, eccentricity: e, entryRadius } = opts;
+  const p = q * (1 + e);
+  // r = p / (1 + e cos v), inverted at the end of the arc.
+  const nuMax = Math.acos(Math.max(-1, Math.min(1, (p / entryRadius - 1) / e)));
+  const n = opts.samples ?? 11;
+  const arg = opts.argument * (Math.PI / 180);
+  const inc = opts.inclination * (Math.PI / 180);
+  const stops: FlybyStop[] = [];
+  for (let i = 0; i < n; i++) {
+    const nu = -nuMax + (2 * nuMax * i) / (n - 1);
+    const r = p / (1 + e * Math.cos(nu));
+    const phi = nu + arg;
+    const inPlane = r * Math.sin(phi);
+    stops.push({
+      at: [r * Math.cos(phi), inPlane * Math.cos(inc), inPlane * Math.sin(inc)],
+      seconds: i === 0 ? 0 : opts.seconds / (n - 1),
+    });
+  }
+  return stops;
+}
+
 export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   {
     id: 'saturn-rings',
@@ -73,14 +128,13 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     name: 'Saturn — through the rings',
     blurb: 'Approach from below, cross the ring plane at two radii, climb away.',
     body: 'saturn',
-    stops: [
-      { at: [7.5, -7.5, -2.6], seconds: 0 },
-      { at: [3.4, -3.0, -0.9], seconds: 18 },
-      { at: [2.05, -0.9, -0.10], seconds: 20 },
-      { at: [1.95, 0.9, 0.07], seconds: 16 },
-      { at: [3.4, 3.4, 1.1], seconds: 18 },
-      { at: [7.0, 6.5, 2.6], seconds: 16 },
-    ],
+    // Steeply inclined, with periapsis on the sunward axis — which is where the
+    // plane of the orbit cuts the plane of the rings, so closest approach and
+    // the ring crossing are the same instant.
+    stops: hyperbolaStops({
+      periapsis: 2.05, eccentricity: 4, argument: 0,
+      inclination: 38, entryRadius: 10, seconds: 88,
+    }),
   },
   {
     id: 'jupiter-skim',
@@ -92,14 +146,10 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     // right round the planet close in, and leaves in a different direction with
     // the full lit face behind it. The camera holds the planet throughout, so
     // it turns to look back on its own as the ship departs.
-    stops: [
-      { at: [-6.5, -7.0, 1.6], seconds: 0 },
-      { at: [-2.2, -2.4, 0.45], seconds: 20 },
-      { at: [-0.5, -1.6, 0.10], seconds: 22 },
-      { at: [1.3, -1.15, 0.05], seconds: 22 },
-      { at: [3.2, 1.4, 0.35], seconds: 20 },
-      { at: [7.5, 6.0, 1.4], seconds: 18 },
-    ],
+    stops: hyperbolaStops({
+      periapsis: 1.5, eccentricity: 5, argument: -55,
+      inclination: 10, entryRadius: 9.5, seconds: 102,
+    }),
   },
   {
     id: 'earthrise',
@@ -133,13 +183,12 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     body: 'io',
     subject: 'jupiter',
     fov: 42,
-    stops: [
-      { at: [-4.5, -3.2, 1.1], seconds: 0 },
-      { at: [-2.3, -1.3, 0.45], seconds: 12 },
-      { at: [-1.7, 0.5, 0.12], seconds: 11 },
-      { at: [-2.1, 1.9, 0.4], seconds: 10 },
-      { at: [-4.0, 3.6, 1.0], seconds: 12 },
-    ],
+    // Periapsis on the far side of Io from Jupiter, so the moon crosses the
+    // planet's face through the middle of the shot and drifts clear at the ends.
+    stops: hyperbolaStops({
+      periapsis: 1.8, eccentricity: 6, argument: 180,
+      inclination: 12, entryRadius: 5.0, seconds: 45,
+    }),
   },
   {
     id: 'sun-pass',
@@ -151,29 +200,25 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     // one and a half — so the largest object in the solar system got the
     // smallest framing of any shot in the list, about 36 degrees. At 1.45
     // radii it spans 87 degrees and stops being an object at all.
-    stops: [
-      { at: [-9.0, -9.0, 2.0], seconds: 0 },
-      { at: [-2.6, -2.6, 0.55], seconds: 22 },
-      { at: [-0.45, -1.40, 0.10], seconds: 24 },
-      { at: [1.15, -0.95, 0.05], seconds: 24 },
-      { at: [3.0, 1.6, 0.4], seconds: 22 },
-      { at: [9.0, 8.0, 1.9], seconds: 20 },
-    ],
+    stops: hyperbolaStops({
+      periapsis: 1.28, eccentricity: 5, argument: -55,
+      inclination: 10, entryRadius: 9.5, seconds: 112,
+    }),
   },
   {
     id: 'mars-lowpass',
-    scaleReference: 'earth',
+    // The Moon, not Earth: a reference only works if it is smaller than the
+    // subject, and Earth is nearly twice Mars. At closest approach here the
+    // camera would be inside it. "About twice the Moon" is also the more
+    // surprising fact.
+    scaleReference: 'moon',
     name: 'Mars — slingshot',
     blurb: 'Round the back of the planet and away with the day side astern.',
     body: 'mars',
-    stops: [
-      { at: [-4.5, -5.0, 1.1], seconds: 0 },
-      { at: [-1.8, -1.9, 0.35], seconds: 18 },
-      { at: [-0.4, -1.35, 0.08], seconds: 20 },
-      { at: [1.1, -0.95, 0.04], seconds: 20 },
-      { at: [2.8, 1.2, 0.3], seconds: 18 },
-      { at: [5.5, 4.5, 1.0], seconds: 16 },
-    ],
+    stops: hyperbolaStops({
+      periapsis: 1.45, eccentricity: 5, argument: -55,
+      inclination: 10, entryRadius: 7.0, seconds: 92,
+    }),
   },
 ];
 
@@ -362,17 +407,24 @@ export class FlybyDirector {
     for (let k = 1; k <= SAMPLES; k++) {
       const u = (k / SAMPLES) * span;
       splineAt(route.stops, u, lengthB);
-      const step = Math.hypot(
-        lengthB[0]! - lengthA[0]!,
-        lengthB[1]! - lengthA[1]!,
-        lengthB[2]! - lengthA[2]!);
-      // Offsets are in body radii, so the distance from the centre is just the
-      // magnitude and `step / distance` is the angle that step subtends.
-      const midX = (lengthA[0]! + lengthB[0]!) / 2;
-      const midY = (lengthA[1]! + lengthB[1]!) / 2;
-      const midZ = (lengthA[2]! + lengthB[2]!) / 2;
-      const distance = Math.max(1, Math.hypot(midX, midY, midZ));
-      acc += step / distance;
+      // Budget the time by how far the body's *limb* travels across the sky,
+      // which is what the eye actually measures the motion by. That is the
+      // rotation of the line of sight — how fast the stars behind it stream —
+      // plus the change in the body's angular radius.
+      //
+      // The obvious metric, distance flown over distance from the centre,
+      // counts a straight dive at the planet as though it were a sweep past
+      // it, and so hands a third of the shot to the one stretch where nothing
+      // in the frame moves. Splitting the two apart is what stops the approach
+      // reading as a zoom.
+      const rA = Math.max(1, Math.hypot(lengthA[0]!, lengthA[1]!, lengthA[2]!));
+      const rB = Math.max(1, Math.hypot(lengthB[0]!, lengthB[1]!, lengthB[2]!));
+      const cos = (lengthA[0]! * lengthB[0]! + lengthA[1]! * lengthB[1]!
+        + lengthA[2]! * lengthB[2]!) / (rA * rB);
+      const swept = Math.acos(Math.max(-1, Math.min(1, cos)));
+      // Offsets are in body radii, so 1/r is the sine of the angular radius.
+      const growth = Math.abs(Math.asin(1 / rB) - Math.asin(1 / rA));
+      acc += swept + growth;
       lengthA[0] = lengthB[0]!;
       lengthA[1] = lengthB[1]!;
       lengthA[2] = lengthB[2]!;

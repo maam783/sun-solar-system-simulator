@@ -281,3 +281,53 @@ Deliberate, and documented where they live:
 - A close pass at true scale is genuinely fast: crossing Saturn in under a
   minute means thousands of km/s. The speed readout during a flypast is real,
   and large.
+
+### Eighth round — the flypasts were zooms
+
+Reported: the star field and the planet seem to move together, "as if you were
+zooming into a picture rather than flying around a real planet".
+
+Correct, and it was geometry, not rendering. The hand-placed waypoints started
+with a leg whose velocity pointed almost exactly at the body's centre — the
+Jupiter route had an impact parameter of 0.3 radii, which is a dive at the
+middle. On a radial approach the line of sight does not turn at all, so the
+stars behind hold perfectly still, no new surface comes over the limb, and the
+one thing that changes in the whole frame is the size of the disc. That is a
+zoom, and the eye reads it as one.
+
+Two causes, both fixed:
+
+1. **The paths were radial.** A real encounter cannot be: the incoming
+   asymptote misses the centre by the impact parameter, so the body drifts
+   across the star field the whole way in and its surface streams underneath at
+   closest approach. The four pass routes now take their waypoints from an
+   actual hyperbola (`hyperbolaStops`), given as periapsis, eccentricity,
+   argument and inclination. Shorter than the hand-tuned lists it replaced.
+
+2. **The pacing counted a dive as a sweep.** Time was budgeted by
+   `step / distance`, which measures any motion including purely radial motion,
+   so the approach was handed a third of the shot for a stretch in which
+   nothing moved. It is now budgeted by how far the body's *limb* travels
+   across the sky: rotation of the line of sight plus change in angular radius.
+
+Measured, before and after:
+
+| route | line of sight turns (median) | share of shot below 0.3 deg/s |
+|---|---|---|
+| Jupiter | 1.18 -> **2.03 deg/s** | 34% -> **6%** |
+| Saturn | 0.55 -> **2.37 deg/s** | 41% -> **5%** |
+| Sun | -> 1.88 deg/s | 7% |
+| Mars | -> 2.16 deg/s | 6% |
+| Io (against Jupiter) | -> 3.88 deg/s | 3% |
+
+Rotation now beats growth 2.6:1 where it used to lose, and the rate is far more
+even (Jupiter peak 3.09 against a median of 2.03; it was 3.92 against 1.18).
+The residual few per cent are the ease-in ramp at each end, not a stall.
+Closest approach unchanged where it mattered: Sun 1.28 radii, Jupiter 1.5,
+Saturn 2.05 through the ring plane.
+
+Also: **Mars had no size reference at all.** Earth is nearly twice Mars, so at
+1.45 Mars radii the camera would have been inside it and the placement code
+pushed it permanently out of frame. Mars now uses the Moon (ratio 2.0), and the
+reference borrows whichever body's real surface map it names instead of always
+being Earth.
