@@ -192,6 +192,30 @@ another), and that the flypasts surged and stalled.
   what Cassini photographs show. Shadowed ring material was being taken down to
   6% brightness though, which reads as a hole; it sits at 14% now.
 
+## Fifth round: the Sun was framed worse than anything else
+
+Reported as "the Sun looks unrealistically small — no bigger than Earth or
+Saturn". It was, and the cause was framing rather than rendering: the solar
+route flew at three radii while the planet routes flew at one and a half, so
+the largest object in the solar system got the smallest shot in the list — 36°
+against Jupiter's 83° and Saturn's 67°.
+
+- The route now passes at 1.28 radii, where the Sun spans **103°** and fills
+  the window edge to edge for seven seconds. It is the largest shot in the set,
+  which is the right order.
+- The glare halo now fades out as the disc resolves (full below 4°, gone by
+  24°). Glare is what an unresolved light source does to an eye; once the Sun
+  is a disc spanning tens of degrees it *is* the sky, and a bright blob laid
+  over it only hid how big it had become.
+- Solar radiance raised from 4 to 7, so a close pass saturates rather than
+  merely being bright.
+
+Worth recording: a close pass at true scale needs superluminal speed. Rounding
+the Sun at 1.3 radii inside a minute means about 1e10 m of track, so the HUD
+reads 1.32 c during that flypast. The routes are camera moves on rails and are
+not bound by the drive's 0.1 c ceiling — the speed shown is the real speed of
+the real path, and the panel says FLYPAST while it runs.
+
 ## Known approximations
 
 Deliberate, and documented where they live:

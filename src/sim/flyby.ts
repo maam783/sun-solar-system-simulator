@@ -131,15 +131,19 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   {
     id: 'sun-pass',
     name: 'Solar slingshot',
-    blurb: 'All the way round the Sun at three radii. It fills the window.',
+    blurb: 'Round the Sun at half a radius above the surface. It is the sky.',
     body: 'sun',
+    // The Sun was being flown at three radii while the planets were flown at
+    // one and a half — so the largest object in the solar system got the
+    // smallest framing of any shot in the list, about 36 degrees. At 1.45
+    // radii it spans 87 degrees and stops being an object at all.
     stops: [
-      { at: [-14, -14, 3.0], seconds: 0 },
-      { at: [-4.5, -4.5, 1.0], seconds: 13 },
-      { at: [-1.0, -3.1, 0.25], seconds: 10 },
-      { at: [2.4, -2.1, 0.15], seconds: 9 },
-      { at: [5.5, 3.0, 0.8], seconds: 11 },
-      { at: [14, 12, 3.0], seconds: 13 },
+      { at: [-9.0, -9.0, 2.0], seconds: 0 },
+      { at: [-2.6, -2.6, 0.55], seconds: 13 },
+      { at: [-0.45, -1.40, 0.10], seconds: 10 },
+      { at: [1.15, -0.95, 0.05], seconds: 9 },
+      { at: [3.0, 1.6, 0.4], seconds: 11 },
+      { at: [9.0, 8.0, 1.9], seconds: 13 },
     ],
   },
   {

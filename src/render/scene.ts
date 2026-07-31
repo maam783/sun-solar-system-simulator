@@ -510,7 +510,7 @@ export class SolarSystemRenderer {
     // not lit by anything: it emits, at a radiance that does not vary with
     // where the observer stands.
     const irradiance = view.def.id === 'sun'
-      ? 4
+      ? 7
       : Math.min(6, solarIrradiance(len(state.pos)) / 1361);
 
     if (useMesh) {
@@ -652,7 +652,15 @@ export class SolarSystemRenderer {
     const size = Math.min(viewportHeight * 1.5, 90 + sunPixels * 2.2);
     const s = (size / viewportHeight) * 2;
     this.sunGlare.scale.set(s, s, 1);
-    (this.sunGlare.material as THREE.SpriteMaterial).opacity = 0.85 * visible;
+
+    // Glare is what an unresolved light source does to an eye. Once the Sun is
+    // a disc spanning tens of degrees it *is* the sky, and a bright blob laid
+    // over it only hides how big it has become — so fade the halo out as the
+    // disc resolves.
+    const angularDeg = (sunAngular * 2 * 180) / Math.PI;
+    const resolved = Math.max(0, Math.min(1, (angularDeg - 4) / 20));
+    (this.sunGlare.material as THREE.SpriteMaterial).opacity =
+      0.85 * visible * (1 - resolved);
   }
 
   // -------------------------------------------------------------------------

@@ -33,6 +33,11 @@ and leave in a different direction with the lit face astern; the camera holds
 the subject, so it swings round to look back as the ship departs. Each is a
 camera move about a minute long. Nothing to pilot.
 
+The Sun's pass goes to 1.28 radii, where it spans 103° and stops being an
+object. Rounding it that close inside a minute takes about 1e10 m of track, so
+the speed readout goes superluminal during that one — the flypasts are camera
+moves on rails, not flights under the drive's 0.1 c ceiling.
+
 **Or fly it yourself.** Flying is four keys: point with the mouse, **W** faster,
 **S** slower, **Space** to stop. That is the whole of the simple view — one
 instrument panel and the list of sights. **FULL CONSOLE** unfolds the rest
