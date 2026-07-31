@@ -131,8 +131,15 @@ export const PLANET_FRAG = /* glsl */ `
       color += texture2D(uNightMap, vUv).rgb * nightAmount * 1.4;
     }
 
-    // Ambient floor so the night side is a silhouette rather than a hole.
-    color += albedo * 0.012;
+    // A faint floor so the night side is a silhouette rather than a hole —
+    // scaled by the local sunlight like everything else.
+    //
+    // Adding it *outside* uIrradiance, as it was, made it an absolute value
+    // that the adaptive exposure then multiplied. At Jupiter that put the night
+    // side at a third of the day side, so the planet looked lit from every
+    // direction at once; at Pluto, where the exposure opens 480x against a
+    // sunlight of 1/1500, the night side came out brighter than the day side.
+    color += albedo * 0.015 * uIrradiance;
 
     gl_FragColor = vec4(color, 1.0);
     #include <tonemapping_fragment>

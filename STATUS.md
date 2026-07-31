@@ -240,6 +240,21 @@ awe, whose two core appraisals are perceived vastness and need for accommodation
 mostly on whether the viewer feels safe, which is an argument for keeping the
 flypasts on rails.
 
+## Seventh round: night sides, and the comparison drawn rather than stated
+
+- **Planets were lit from every direction.** The ambient floor was added
+  *outside* the irradiance scaling — `color = albedo * lit * uIrradiance;` then
+  `color += albedo * 0.012;` — so it was an absolute value that the adaptive
+  exposure then multiplied. The night side came out at 33% of the day side at
+  Jupiter, 65% at Saturn, and **1494%** at Pluto, where the exposure opens 433×
+  against a sunlight of 1/1500. Scaling the floor by `uIrradiance` puts every
+  body at a constant 1.5%, so a terminator is a terminator again.
+- **The size comparison is drawn now**, not just written: two discs at their
+  true ratio, Earth as the yardstick (the Moon when Earth is the subject). The
+  reference is held at a readable size and the subject scaled from it, with the
+  box clipping the overflow — for the Sun that means a 764 px arc beside a 7 px
+  Earth, which is the shape the number 109 actually has.
+
 ## Known approximations
 
 Deliberate, and documented where they live:
