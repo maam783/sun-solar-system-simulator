@@ -90,6 +90,10 @@
   #hud:not(.advanced) #console h2 { display: none; }
   #hud.advanced #nav { top: 296px; }
 
+  /* The flight readout is an instrument panel, and the simple view is not
+     flying by instruments. It comes back with the full console. */
+  #hud.simple #flight { display: none; }
+
   /* Throttle / progress bars */
   .bar {
     height: 4px;

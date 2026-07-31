@@ -36,14 +36,12 @@ import {
 } from './shaders';
 import { vec, sub, len, normalize, dot, type Vec3 } from '../math/vec3d';
 import { toQuaternion } from '../math/mat3d';
-import { quatRotate } from '../math/quat';
 
 const relPos = vec();
 const sunRel = vec();
 const dirA = vec();
 const dirB = vec();
 const quatScratch = [0, 0, 0, 1];
-const CAMERA_RIGHT: Vec3 = { x: 1, y: 0, z: 0 };
 
 interface BodyView {
   def: BodyPhysical;
@@ -701,44 +699,23 @@ export class SolarSystemRenderer {
       0.85 * visible * (1 - resolved);
   }
 
-  /** Park the reference body just clear of the subject's limb, at its range. */
+  /** Draw the size reference where the flypast put it, and light it there. */
   private updateScaleReference(world: World, shipPos: Vec3, sunVector: THREE.Vector3): void {
     const route = world.flyby.active ? world.flyby.route : null;
     const refId = route?.scaleReference;
-    if (!route || !refId) {
+    const where = world.flyby.referencePos;
+    if (!route || !refId || !where) {
       this.scaleRef.visible = false;
       return;
     }
 
-    const subjectId = route.subject ?? route.body;
-    const subject = getBody(subjectId);
     const reference = getBody(refId);
-    const state = world.bodyState(subjectId);
-    sub(relPos, state.pos, shipPos);
-    const range = len(relPos);
-    if (range <= subject.radius) {
-      this.scaleRef.visible = false;
-      return;
-    }
-    normalize(dirA, relPos);
 
-    // Sit it just outside the limb: far enough not to overlap, close enough
-    // that it is in shot whenever the limb is.
-    const subjectAngle = Math.asin(Math.min(1, subject.radius / range));
-    const refAngle = Math.asin(Math.min(1, reference.radius / range));
-    const lateral = Math.min(1.3, subjectAngle + refAngle * 1.8 + 0.025);
-
-    // Offset across the camera's own right axis, so it lands beside the
-    // subject in the frame rather than somewhere behind it.
-    quatRotate(dirB, world.ship.attitude, CAMERA_RIGHT);
-    const spread = Math.tan(lateral);
-    dirB.x = dirA.x + dirB.x * spread;
-    dirB.y = dirA.y + dirB.y * spread;
-    dirB.z = dirA.z + dirB.z * spread;
-    normalize(dirB, dirB);
-
+    // A place in the world, subtracted in f64 like every other body. Nothing
+    // about it is a function of where the camera happens to point.
+    sub(relPos, where, shipPos);
     this.scaleRef.visible = true;
-    this.scaleRef.position.set(dirB.x * range, dirB.y * range, dirB.z * range);
+    this.scaleRef.position.set(relPos.x, relPos.y, relPos.z);
     this.scaleRef.scale.setScalar(reference.radius);
 
     // Orient and light it exactly as the real body would be, so it reads as an
@@ -766,7 +743,8 @@ export class SolarSystemRenderer {
     }
     u.uSunPos!.value.copy(sunVector);
     u.uCameraPosW!.value.set(0, 0, 0);
-    u.uIrradiance!.value = Math.min(6, solarIrradiance(len(state.pos)) / 1361);
+    // Sunlight where it stands, not where the subject stands.
+    u.uIrradiance!.value = Math.min(6, solarIrradiance(len(where)) / 1361);
   }
 
   // -------------------------------------------------------------------------

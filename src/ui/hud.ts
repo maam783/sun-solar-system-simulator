@@ -532,8 +532,10 @@ export class Hud {
 
     // --- Sightseeing route ---
     const flyby = world.flyby;
+    // Nothing to read while a shot is running. Whatever the line said, it sat
+    // in the middle of the view for a minute and a half and was never read.
     this.field('flybyStatus').textContent = flyby.active
-      ? flyby.route?.blurb ?? ''
+      ? ''
       : (flyby.message || 'Pick a flypast — the ship flies it for you.');
     (this.field('flybyFill') as HTMLElement).style.width =
       `${(flyby.active ? flyby.progress : 0) * 100}%`;
@@ -552,10 +554,9 @@ export class Hud {
       const refId = flyby.route.scaleReference;
       const refNote = this.field('flybyRefNote');
       if (refId) {
-        refNote.textContent =
-          `${getBody(refId).name} is in shot beside it, to scale and at the same `
-          + 'range — placed there for comparison, and the only thing here that is '
-          + 'not really there.';
+        // Short, because it has to stay: it is the one object in the whole
+        // simulation that was put there, and that should not go unsaid.
+        refNote.textContent = `${getBody(refId).name} in orbit — to scale, and not really there.`;
         refNote.style.display = '';
       } else {
         refNote.style.display = 'none';

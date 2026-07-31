@@ -103,10 +103,13 @@ under 10% of each shot below 0.3 deg/s.
 
 ## The one deliberate fiction in the scene
 
-`FlybyRoute.scaleReference` puts a to-scale Earth in frame beside the subject
-during a flypast, at the same camera range so the angular ratio is exact. The
-reference must be *smaller* than the subject or it cannot be placed clear of it
-— Mars uses the Moon for that reason. It is
+`FlybyRoute.scaleReference` puts a to-scale body in orbit around the subject
+during a flypast. `FlybyDirector.planReference()` picks its radius, phase and
+inclination once at route start by scoring the whole shot. Do not go back to
+placing it relative to the camera: that was tried, and a prop held beside the
+window slides into the ship's path and its lighting jumps instead of evolving.
+The reference must also be *smaller* than the subject — Mars uses the Moon,
+because Earth is nearly twice Mars and the camera would end up inside it. It is
 rendered through the normal planet shader, so it is lit and oriented like a real
 body. Nothing else in the simulation is fabricated, and the sights panel says so
 whenever it is visible. Do not quietly extend this to other objects.

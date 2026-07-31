@@ -365,6 +365,25 @@ export class FlybyDirector {
   elapsed = 0;
   message = '';
 
+  /**
+   * Where the size reference is, in the world. Null when a route has none.
+   *
+   * It has to be a place, not a screen position. Holding it a fixed angle off
+   * to the camera's right made the angular comparison exact, but it was a prop
+   * carried along beside the window rather than a body: it slid into the
+   * ship's path during the wrap, and because it was moved every frame its
+   * phase jumped around instead of evolving, so it read as lit from within
+   * while the planet next to it showed a terminator. A point in the world
+   * fixes both at once — the light is simply computed where it stands.
+   */
+  referencePos: Vec3 | null = null;
+
+  private reference = vec();
+  private refRadius = 0;
+  private refPhase = 0;
+  private refInclination = 0;
+  private refRate = 0;
+
   private total = 0;
   /**
    * Swept-angle lookup: `distance[i]` is how much *angle*, seen from the body,
@@ -432,6 +451,99 @@ export class FlybyDirector {
       this.distance.push(acc);
     }
     this.totalLength = acc;
+    this.planReference(route);
+  }
+
+  /**
+   * Choose an orbit for the size reference.
+   *
+   * A moon in the body's equatorial plane, which is where regular moons are,
+   * leaves only two numbers to pick: how far out and where round. They are
+   * chosen by trying them — for each candidate the whole shot is walked and the
+   * placement scored on how much of it the reference spends outside the
+   * subject's limb but still inside the frame, with a penalty for sitting at a
+   * different range from the subject, since a nearer body looks bigger for
+   * reasons that have nothing to do with its size. Anything the ship would fly
+   * within a few reference radii of is rejected outright.
+   *
+   * A radius near the route's own periapsis tends to win, and the reason is
+   * worth knowing: it keeps the reference about one closest-approach off to
+   * the side throughout, so its range and the subject's stay within a few per
+   * cent of each other and the comparison survives without being staged.
+   */
+  private planReference(route: FlybyRoute): void {
+    this.refRadius = 0;
+    this.referencePos = null;
+    const refId = route.scaleReference;
+    if (!refId) return;
+
+    const body = getBody(route.body);
+    // Everything here is in body radii, which is what the scenic frame uses.
+    const refRadii = getBody(refId).radius / body.radius;
+    const halfFov = (((route.fov ?? 60) * Math.PI) / 180) / 2;
+
+    const SAMPLES = 72;
+    const track: number[][] = [];
+    let periapsis = Infinity;
+    for (let i = 0; i <= SAMPLES; i++) {
+      splineAt(route.stops, this.segmentAt((i / SAMPLES) * this.total), lengthB);
+      const p = [lengthB[0]!, lengthB[1]!, lengthB[2]!];
+      periapsis = Math.min(periapsis, Math.hypot(p[0]!, p[1]!, p[2]!));
+      track.push(p);
+    }
+
+    let best = -Infinity;
+    for (const multiple of [0.6, 0.8, 1, 1.25, 1.6, 2, 2.6]) {
+      const r = periapsis * multiple;
+      if (r < 1 + refRadii * 1.2) continue;   // it would be inside the body
+      for (const incDeg of [0, 30, 55, 75, 90]) {
+      const inc = (incDeg * Math.PI) / 180;
+      for (let k = 0; k < 72; k++) {
+        const theta = (k / 72) * Math.PI * 2;
+        const rx = r * Math.cos(theta);
+        const ry = r * Math.sin(theta) * Math.cos(inc);
+        const rz = r * Math.sin(theta) * Math.sin(inc);
+        let clearance = Infinity;
+        let framed = 0;
+        let mismatch = 0;
+        for (const p of track) {
+          const dx = rx - p[0]!;
+          const dy = ry - p[1]!;
+          const dz = rz - p[2]!;
+          const toRef = Math.hypot(dx, dy, dz);
+          const toSubject = Math.hypot(p[0]!, p[1]!, p[2]!);
+          clearance = Math.min(clearance, toRef);
+          const cos = -(p[0]! * dx + p[1]! * dy + p[2]! * dz) / (toSubject * toRef);
+          const apart = Math.acos(Math.max(-1, Math.min(1, cos)));
+          const subjectAngle = Math.asin(Math.min(1, 1 / toSubject));
+          const refAngle = Math.asin(Math.min(1, refRadii / toRef));
+          // Visible either clear of the limb, or crossing the face in front of
+          // it — a transit is not a failure of the shot, it is the best version
+          // of it. Only being genuinely behind the subject loses the reference.
+          const visible = apart > subjectAngle + refAngle * 1.2 || toRef < toSubject - 1;
+          if (visible && apart < halfFov * 0.82) framed++;
+          mismatch += Math.abs(Math.log(toRef / toSubject));
+        }
+        // A clean miss is all that is wanted; the ship is fifty metres long.
+        // Demanding more than this rules out the close orbits, and those are
+        // the ones that keep the reference at the subject's own range.
+        if (clearance < refRadii * 3) continue;
+        const score = framed / track.length - 0.5 * (mismatch / track.length);
+        if (score > best) {
+          best = score;
+          this.refRadius = r;
+          this.refPhase = theta;
+          this.refInclination = inc;
+        }
+      }
+      }
+    }
+
+    if (this.refRadius > 0) {
+      const a = this.refRadius * body.radius;
+      this.refRate = Math.sqrt(body.mu / (a * a * a));
+      this.referencePos = this.reference;
+    }
   }
 
   stop(): void {
@@ -527,6 +639,20 @@ export class FlybyDirector {
     copy(outPos, posA);
     sub(outVel, posB, posA);
     scale(outVel, outVel, 1 / h);
+
+    // The reference is on a real circular orbit, so it moves while the shot
+    // runs. Over a hundred seconds that is a fraction of a degree — but it is
+    // the difference between a body that is somewhere and a body that is held
+    // there, and the shot is only worth anything if it is the first.
+    if (this.refRadius > 0) {
+      const theta = this.refPhase + this.refRate * this.elapsed;
+      const inPlane = this.refRadius * Math.sin(theta);
+      scratchAt[0] = this.refRadius * Math.cos(theta);
+      scratchAt[1] = inPlane * Math.cos(this.refInclination);
+      scratchAt[2] = inPlane * Math.sin(this.refInclination);
+      toWorld(this.route, scratchAt, this.reference);
+      this.referencePos = this.reference;
+    }
 
     const subject = this.route.subject ?? this.route.body;
     ephemeris.state(subject, t, subjectPos, subjectVel);

@@ -331,3 +331,43 @@ Also: **Mars had no size reference at all.** Earth is nearly twice Mars, so at
 pushed it permanently out of frame. Mars now uses the Moon (ratio 2.0), and the
 reference borrows whichever body's real surface map it names instead of always
 being Earth.
+
+### Ninth round — the reference was a prop, not a body
+
+Reported: the reference Earth sits to the right, so the slingshot flies through
+it or just past it and then it is gone; and it is "lit as though from inside",
+not following the same light as the body next to it. Plus: drop the top-left
+console outside the full view, and drop the commentary under the six sights.
+
+Both halves of the first complaint had one cause. The reference was pinned to
+the *camera* — held a computed angle off the boresight, at the subject's range
+— so it was a prop carried along beside the window rather than an object. Being
+re-placed every frame, it slid into the ship's path during the wrap, and its
+phase jumped rather than evolving, which is what "lit from inside" was: a fully
+lit disc beside a planet showing a terminator.
+
+It is now a body on a real circular orbit around the subject, and the renderer
+only reads its position. Radius, orbital phase and inclination are chosen once
+at route start by walking the whole shot and scoring the placement: how much of
+the route it spends visible and in frame, penalised for sitting at a different
+range from the subject, with anything the ship would pass close to rejected.
+Inclination turned out to matter most — an equatorial orbit is in nearly the
+same plane as the flight, so the planet gets between them; a steeply inclined
+one never does.
+
+| route | hidden behind subject | range vs subject | ship's closest pass |
+|---|---|---|---|
+| Jupiter | 53% -> **0%** | 1.38 -> **0.99** | 15.7 Earth radii |
+| Saturn | 0% -> **3%** | 0.90 -> **0.87** | 7.5 Earth radii |
+| Sun | 6% -> **0%** | 1.48 -> **1.00** | 134.8 Earth radii |
+| Mars | 38% -> **0%** | 1.93 -> **1.06** | 3.1 Moon radii |
+
+The range ratios near 1 mean the size comparison is still exact — the reference
+really is at the subject's own distance — but now because the orbit puts it
+there, not because it is held there. It is lit where it stands, so its phase
+tracks the subject's within the tens of degrees the geometry actually implies.
+
+HUD: the flight panel is hidden in the simple view (it is an instrument panel,
+and the simple view is not flying by instruments), the route blurb no longer
+sits in the middle of the view for the length of a shot, and the note owning up
+to the reference is one short line.
