@@ -9,6 +9,7 @@
 import { SolarSystemRenderer } from './render/scene';
 import { Hud } from './ui/hud';
 import { InputController } from './ui/input';
+import { Ambience } from './ui/audio';
 import { World } from './sim/world';
 import { PilotDrive } from './sim/pilot';
 import { AUTOPILOT, RENDER, SHIP, SPEED } from './config';
@@ -112,6 +113,17 @@ const toggleHelp = (): void => {
   else hud.showHelp();
 };
 
+/**
+ * Fullscreen, because the frame round the window is the one thing that keeps
+ * insisting you are looking at a web page rather than out of a ship.
+ */
+const toggleFullscreen = (): void => {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void document.documentElement.requestFullscreen().catch(() => {});
+};
+
+const ambience = new Ambience();
+
 const input = new InputController(canvas, {
   killRelativeVelocity: () => {
     if (world.flightModel === 'pilot') {
@@ -127,6 +139,12 @@ const input = new InputController(canvas, {
   },
   cycleTarget: (delta) => world.cycleTarget(delta),
   toggleHelp,
+  toggleFullscreen: () => toggleFullscreen(),
+  toggleMute: () => { ambience.toggleMute(); },
+  toggleConsole: () => {
+    hud.setSimple(!hud.simple);
+    if (!hud.simple) world.flightModel = 'pilot';
+  },
   toggleAutopilot: engageAutopilot,
   toggleOverride: () => {
     if (world.ship.mode === 'override') world.setNormalMode();
@@ -166,6 +184,11 @@ const input = new InputController(canvas, {
     else if (document.pointerLockElement) document.exitPointerLock();
   },
 });
+
+// Browsers will not make a sound until the user has touched something.
+for (const event of ['pointerdown', 'keydown'] as const) {
+  window.addEventListener(event, () => { void ambience.start(); }, { once: true });
+}
 
 renderer.loadTextures();
 renderer.onContextLost = () => hud.setStatus('Graphics context lost — restoring…');
@@ -240,6 +263,12 @@ const frame = (now: number): void => {
   renderer.setFov(routeFov ?? fov);
 
   renderer.render(world);
+  // The drive is the only thing with a voice, and it only has one while it is
+  // actually burning — so coasting is silent, which is the physics said aloud.
+  const burning = world.flightModel === 'pilot' && !world.flyby.active
+    && (world.pilot.engaged || (world.pilot.stopping && world.referenceSpeed() > 5));
+  ambience.update(burning ? 1 : 0, dtReal);
+
   hud.update(world, renderer, fps, input.pointerLocked);
   scenario?.afterFrame();
 

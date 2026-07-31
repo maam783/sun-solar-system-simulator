@@ -237,6 +237,9 @@ export const ATMOSPHERE_FRAG = /* glsl */ `
   uniform vec3 uCameraPosW;
   uniform vec3 uColor;
   uniform float uIrradiance;
+  uniform vec3 uPlanetPosW;
+  uniform float uPlanetRadius;
+  uniform float uShellThickness;
 
   varying vec3 vNormalW;
   varying vec3 vPosW;
@@ -255,7 +258,26 @@ export const ATMOSPHERE_FRAG = /* glsl */ `
     // Forward scattering: the crescent is brightest looking back toward the Sun.
     float forward = pow(max(dot(toEye, -toSun), 0.0), 2.0) * 0.5 + 1.0;
 
-    float alpha = rim * clamp(lit * 1.3, 0.0, 1.0) * forward;
+    // Fade with height above the surface, which is the whole difference between
+    // an atmosphere and a shell.
+    //
+    // The haze used to be brightest exactly at the geometric edge of the mesh,
+    // so it ended in a hard, nearly opaque rim — a grey collar round the
+    // planet, and the one place where the sphere's own polygon edges showed.
+    // Air does not end anywhere; it thins out. Measuring how far the line of
+    // sight passes from the centre gives the height it grazes at, and an
+    // exponential in that height means the haze has faded to nothing well
+    // inside the mesh boundary, so there is no edge left to see.
+    vec3 rayDir = normalize(vPosW - uCameraPosW);
+    vec3 toCentre = uPlanetPosW - uCameraPosW;
+    vec3 closest = toCentre - rayDir * dot(toCentre, rayDir);
+    float height = (length(closest) - uPlanetRadius) / max(uShellThickness, 1.0);
+    // Below the limb the ray is crossing the disc, where the grazing term is
+    // already the right shape; above it, the exponential takes over. The two
+    // agree at the limb, where both are 1.
+    float profile = height < 0.0 ? rim : exp(-height * 3.5);
+
+    float alpha = 0.55 * profile * clamp(lit * 1.3, 0.0, 1.0) * forward;
     gl_FragColor = vec4(uColor * uIrradiance, clamp(alpha, 0.0, 1.0));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

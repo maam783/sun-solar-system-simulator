@@ -52,17 +52,6 @@ export interface FlybyRoute {
    * matter to the shot, and the geometry is real on whatever date it lands.
    */
   needsLitSubject?: boolean;
-  /**
-   * Body to place in shot, to scale, as a size reference.
-   *
-   * The reason Saturn always read as huge and the Sun never did is that Saturn
-   * has the rings in frame and the Sun has nothing: an unmarked sphere carries
-   * no cue to read size from. This puts something of known size *in the world*
-   * beside the subject rather than in a panel — the ratio has to be seen, not
-   * stated. It is the one thing in the scene that is not really there, and the
-   * console says so while it is on screen.
-   */
-  scaleReference?: string;
   stops: FlybyStop[];
 }
 
@@ -124,7 +113,6 @@ function hyperbolaStops(opts: {
 export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   {
     id: 'saturn-rings',
-    scaleReference: 'earth',
     name: 'Saturn — through the rings',
     blurb: 'Approach from below, cross the ring plane at two radii, climb away.',
     body: 'saturn',
@@ -138,7 +126,6 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'jupiter-skim',
-    scaleReference: 'earth',
     name: 'Jupiter — slingshot',
     blurb: 'In over the night side, round the limb at 1.5 radii, out into the light.',
     body: 'jupiter',
@@ -192,7 +179,6 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'sun-pass',
-    scaleReference: 'earth',
     name: 'Solar slingshot',
     blurb: 'Round the Sun at half a radius above the surface. It is the sky.',
     body: 'sun',
@@ -207,11 +193,6 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'mars-lowpass',
-    // The Moon, not Earth: a reference only works if it is smaller than the
-    // subject, and Earth is nearly twice Mars. At closest approach here the
-    // camera would be inside it. "About twice the Moon" is also the more
-    // surprising fact.
-    scaleReference: 'moon',
     name: 'Mars — slingshot',
     blurb: 'Round the back of the planet and away with the day side astern.',
     body: 'mars',
@@ -365,25 +346,6 @@ export class FlybyDirector {
   elapsed = 0;
   message = '';
 
-  /**
-   * Where the size reference is, in the world. Null when a route has none.
-   *
-   * It has to be a place, not a screen position. Holding it a fixed angle off
-   * to the camera's right made the angular comparison exact, but it was a prop
-   * carried along beside the window rather than a body: it slid into the
-   * ship's path during the wrap, and because it was moved every frame its
-   * phase jumped around instead of evolving, so it read as lit from within
-   * while the planet next to it showed a terminator. A point in the world
-   * fixes both at once — the light is simply computed where it stands.
-   */
-  referencePos: Vec3 | null = null;
-
-  private reference = vec();
-  private refRadius = 0;
-  private refPhase = 0;
-  private refInclination = 0;
-  private refRate = 0;
-
   private total = 0;
   /**
    * Swept-angle lookup: `distance[i]` is how much *angle*, seen from the body,
@@ -451,136 +413,6 @@ export class FlybyDirector {
       this.distance.push(acc);
     }
     this.totalLength = acc;
-    this.planReference(route);
-  }
-
-  /**
-   * Choose an orbit for the size reference.
-   *
-   * A moon in the body's equatorial plane, which is where regular moons are,
-   * leaves only two numbers to pick: how far out and where round. They are
-   * chosen by trying them — for each candidate the whole shot is walked and the
-   * placement scored on how much of it the reference spends outside the
-   * subject's limb but still inside the frame, with a penalty for sitting at a
-   * different range from the subject, since a nearer body looks bigger for
-   * reasons that have nothing to do with its size. Anything the ship would fly
-   * within a few reference radii of is rejected outright.
-   *
-   * A radius near the route's own periapsis tends to win, and the reason is
-   * worth knowing: it keeps the reference about one closest-approach off to
-   * the side throughout, so its range and the subject's stay within a few per
-   * cent of each other and the comparison survives without being staged.
-   */
-  private planReference(route: FlybyRoute): void {
-    this.refRadius = 0;
-    this.referencePos = null;
-    const refId = route.scaleReference;
-    if (!refId) return;
-
-    const body = getBody(route.body);
-    const isStar = body.kind === 'star';
-    // Everything here is in body radii, which is what the scenic frame uses.
-    const refRadii = getBody(refId).radius / body.radius;
-    const halfFov = (((route.fov ?? 60) * Math.PI) / 180) / 2;
-
-    const SAMPLES = 72;
-    const track: number[][] = [];
-    let periapsis = Infinity;
-    for (let i = 0; i <= SAMPLES; i++) {
-      splineAt(route.stops, this.segmentAt((i / SAMPLES) * this.total), lengthB);
-      const p = [lengthB[0]!, lengthB[1]!, lengthB[2]!];
-      periapsis = Math.min(periapsis, Math.hypot(p[0]!, p[1]!, p[2]!));
-      track.push(p);
-    }
-
-    let best = -Infinity;
-    for (const multiple of [0.6, 0.8, 1, 1.25, 1.6, 2, 2.6]) {
-      const r = periapsis * multiple;
-      if (r < 1 + refRadii * 1.2) continue;   // it would be inside the body
-      for (const incDeg of [0, 30, 55, 75, 90]) {
-      const inc = (incDeg * Math.PI) / 180;
-      for (let k = 0; k < 72; k++) {
-        const theta = (k / 72) * Math.PI * 2;
-        const rx = r * Math.cos(theta);
-        const ry = r * Math.sin(theta) * Math.cos(inc);
-        const rz = r * Math.sin(theta) * Math.sin(inc);
-        let clearance = Infinity;
-        let framed = 0;
-        for (const p of track) {
-          const dx = rx - p[0]!;
-          const dy = ry - p[1]!;
-          const dz = rz - p[2]!;
-          const toRef = Math.hypot(dx, dy, dz);
-          const toSubject = Math.hypot(p[0]!, p[1]!, p[2]!);
-          clearance = Math.min(clearance, toRef);
-          const cos = -(p[0]! * dx + p[1]! * dy + p[2]! * dz) / (toSubject * toRef);
-          const apart = Math.acos(Math.max(-1, Math.min(1, cos)));
-          const subjectAngle = Math.asin(Math.min(1, 1 / toSubject));
-          const refAngle = Math.asin(Math.min(1, refRadii / toRef));
-          // A transit is the shot. Something of known size *on* the disc, on
-          // the line between the eye and the subject, is a far stronger
-          // statement of scale than the same object parked beside it: there is
-          // nothing left to argue about, no chance the eye reads it as nearer
-          // or further. It is the transit-of-Venus photograph, and it is worth
-          // three times a placement off to one side.
-          //
-          // Only against a lit face, though. Silhouetted on the night side it
-          // is black on black, so the weight follows how much of the subject's
-          // visible face is in sunlight — which in this frame is just how far
-          // round the sunward axis the ship has come. A star has no phase.
-          const litFace = isStar ? 1 : (1 + p[0]! / toSubject) / 2;
-          // In front of the nearest point of the subject, and inside its disc.
-          const transiting = toRef < toSubject - 1 && apart < subjectAngle - refAngle;
-          const beside = apart > subjectAngle + refAngle * 1.2;
-          //
-          // A transit costs something, and it has to be charged for. To be in
-          // front the reference must be nearer than the subject by at least its
-          // own orbit radius, so it is magnified by d / (d - r): half again at
-          // three radii out, and worse closer in. That is the one error a size
-          // reference must not make, so a transit earns nothing once it is
-          // showing the reference more than about 1.4x oversize. Left unpriced
-          // the search cheerfully bought a transit at 2.2x.
-          const depth = toRef / toSubject;
-          if (apart < halfFov * 0.82) {
-            if (transiting) {
-              // Below the threshold this is not a weaker version of the shot,
-              // it is a false one — the reference is crossing the disc looking
-              // half again too big — so it is charged rather than merely
-              // unrewarded, or it gets bought as a side effect of a placement
-              // chosen for other reasons.
-              framed += depth > 0.6
-                ? 5 * litFace * Math.min(1, (depth - 0.6) / 0.15)
-                : -1;
-            } else if (beside) {
-              // Beside the subject it should be at the subject's own range, or
-              // it is answering a question nobody asked.
-              framed += 1 - Math.min(1, Math.abs(Math.log(depth)));
-            } else {
-              // In frame but behind the subject: the reference is simply gone.
-              framed -= 0.5;
-            }
-          }
-        }
-        // A clean miss is all that is wanted; the ship is fifty metres long.
-        // Demanding more than this rules out the close orbits, and those are
-        // the ones that keep the reference at the subject's own range.
-        if (clearance < refRadii * 3) continue;
-        const score = framed / track.length;
-        if (score > best) {
-          best = score;
-          this.refRadius = r;
-          this.refPhase = theta;
-          this.refInclination = inc;
-        }
-      }
-      }
-    }
-
-    if (this.refRadius > 0) {
-      const a = this.refRadius * body.radius;
-      this.refRate = Math.sqrt(body.mu / (a * a * a));
-      this.referencePos = this.reference;
-    }
   }
 
   stop(): void {
@@ -676,20 +508,6 @@ export class FlybyDirector {
     copy(outPos, posA);
     sub(outVel, posB, posA);
     scale(outVel, outVel, 1 / h);
-
-    // The reference is on a real circular orbit, so it moves while the shot
-    // runs. Over a hundred seconds that is a fraction of a degree — but it is
-    // the difference between a body that is somewhere and a body that is held
-    // there, and the shot is only worth anything if it is the first.
-    if (this.refRadius > 0) {
-      const theta = this.refPhase + this.refRate * this.elapsed;
-      const inPlane = this.refRadius * Math.sin(theta);
-      scratchAt[0] = this.refRadius * Math.cos(theta);
-      scratchAt[1] = inPlane * Math.cos(this.refInclination);
-      scratchAt[2] = inPlane * Math.sin(this.refInclination);
-      toWorld(this.route, scratchAt, this.reference);
-      this.referencePos = this.reference;
-    }
 
     const subject = this.route.subject ?? this.route.body;
     ephemeris.state(subject, t, subjectPos, subjectVel);

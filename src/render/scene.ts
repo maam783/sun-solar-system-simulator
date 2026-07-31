@@ -91,8 +91,6 @@ export class SolarSystemRenderer {
   private readonly views = new Map<string, BodyView>();
   private readonly geometries = new Map<number, THREE.SphereGeometry>();
   private sunGlare!: THREE.Sprite;
-  private scaleRef!: THREE.Mesh;
-  private scaleRefMaterial!: THREE.ShaderMaterial;
   private stars!: THREE.Points;
   private glowTexture!: THREE.Texture;
 
@@ -143,7 +141,6 @@ export class SolarSystemRenderer {
     this.buildStars();
     this.buildBodies();
     this.buildSunGlare();
-    this.buildScaleReference();
     this.installContextHandlers();
     this.resize();
   }
@@ -205,6 +202,9 @@ export class SolarSystemRenderer {
             uSunPos: { value: new THREE.Vector3() },
             uCameraPosW: { value: new THREE.Vector3() },
             uColor: { value: new THREE.Color(def.atmosphereColor) },
+            uPlanetPosW: { value: new THREE.Vector3() },
+            uPlanetRadius: { value: def.radiusEq },
+            uShellThickness: { value: def.radiusEq * def.atmosphereScale },
             uIrradiance: { value: 1 },
           },
           transparent: true,
@@ -212,7 +212,7 @@ export class SolarSystemRenderer {
           depthWrite: false,
           side: THREE.FrontSide,
         });
-        atmosphere = new THREE.Mesh(this.sphere(48), atmoMaterial);
+        atmosphere = new THREE.Mesh(this.sphere(RENDER.lodSegments[1]!), atmoMaterial);
         atmosphere.frustumCulled = false;
         // Drawn after the surface so the glow sits on top of the limb.
         atmosphere.renderOrder = 1;
@@ -285,38 +285,6 @@ export class SolarSystemRenderer {
     this.sunGlare.frustumCulled = false;
     this.sunGlare.renderOrder = 3;
     this.scene.add(this.sunGlare);
-  }
-
-  /**
-   * A second, to-scale Earth, placed beside whatever a flypast is looking at.
-   *
-   * It sits at the *same range from the camera* as the subject's centre, so
-   * the two angular sizes are in their true ratio and the comparison is honest
-   * even though the object is not.
-   */
-  private buildScaleReference(): void {
-    this.scaleRefMaterial = new THREE.ShaderMaterial({
-      vertexShader: PLANET_VERT,
-      fragmentShader: PLANET_FRAG,
-      uniforms: {
-        uSunPos: { value: new THREE.Vector3() },
-        uCameraPosW: { value: new THREE.Vector3() },
-        uBaseColor: { value: new THREE.Color(0xffffff) },
-        uIrradiance: { value: 1 },
-        uMap: { value: null },
-        uHasMap: { value: false },
-        uNightMap: { value: null },
-        uHasNight: { value: false },
-        uIsGasGiant: { value: false },
-        uSeed: { value: 12 },
-        uRoughnessDetail: { value: 1 },
-        uTime: { value: 0 },
-      },
-    });
-    this.scaleRef = new THREE.Mesh(this.sphere(64), this.scaleRefMaterial);
-    this.scaleRef.frustumCulled = false;
-    this.scaleRef.visible = false;
-    this.scene.add(this.scaleRef);
   }
 
   /**
@@ -490,7 +458,6 @@ export class SolarSystemRenderer {
     }
 
     this.updateSunGlare(world, shipPos, sunRel, sunDistance, fovRad, height);
-    this.updateScaleReference(world, shipPos, sunVector);
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -564,6 +531,11 @@ export class SolarSystemRenderer {
       const lod = pixels > 900 ? 4 : pixels > 300 ? 3 : pixels > 80 ? 2 : pixels > 16 ? 1 : 0;
       if (lod !== view.lod) {
         view.mesh.geometry = this.sphere(RENDER.lodSegments[lod]!);
+        // The atmosphere shell has to follow. It used to be built once at 48
+        // segments and left there while the planet went to 256, so from close
+        // in — where a single segment spans a great deal of sky — the haze had
+        // a visibly straight-edged outline running round a smooth limb.
+        if (view.atmosphere) view.atmosphere.geometry = this.sphere(RENDER.lodSegments[lod]!);
         view.lod = lod;
       }
 
@@ -581,6 +553,7 @@ export class SolarSystemRenderer {
         const au = (view.atmosphere.material as THREE.ShaderMaterial).uniforms;
         au.uSunPos!.value.copy(sunVector);
         au.uCameraPosW!.value.set(0, 0, 0);
+        au.uPlanetPosW!.value.set(px, py, pz);
         au.uIrradiance!.value = irradiance;
       }
 
@@ -697,54 +670,6 @@ export class SolarSystemRenderer {
     const resolved = Math.max(0, Math.min(1, (angularDeg - 4) / 20));
     (this.sunGlare.material as THREE.SpriteMaterial).opacity =
       0.85 * visible * (1 - resolved);
-  }
-
-  /** Draw the size reference where the flypast put it, and light it there. */
-  private updateScaleReference(world: World, shipPos: Vec3, sunVector: THREE.Vector3): void {
-    const route = world.flyby.active ? world.flyby.route : null;
-    const refId = route?.scaleReference;
-    const where = world.flyby.referencePos;
-    if (!route || !refId || !where) {
-      this.scaleRef.visible = false;
-      return;
-    }
-
-    const reference = getBody(refId);
-
-    // A place in the world, subtracted in f64 like every other body. Nothing
-    // about it is a function of where the camera happens to point.
-    sub(relPos, where, shipPos);
-    this.scaleRef.visible = true;
-    this.scaleRef.position.set(relPos.x, relPos.y, relPos.z);
-    this.scaleRef.scale.setScalar(reference.radius);
-
-    // Orient and light it exactly as the real body would be, so it reads as an
-    // object in the scene rather than a sprite pasted on.
-    const refState = world.bodyState(refId);
-    toQuaternion(refState.orientation, quatScratch);
-    this.scaleRef.quaternion.set(
-      quatScratch[0]!, quatScratch[1]!, quatScratch[2]!, quatScratch[3]!);
-
-    const u = this.scaleRefMaterial.uniforms;
-    // Borrow the real body's surface, so whichever body a route names as its
-    // yardstick looks like itself — and falls back to the same procedural
-    // surface if its texture never downloaded.
-    const source = this.views.get(refId);
-    if (source) {
-      const s = source.material.uniforms;
-      u.uMap!.value = s.uMap!.value;
-      u.uHasMap!.value = s.uHasMap!.value;
-      u.uNightMap!.value = s.uNightMap!.value;
-      u.uHasNight!.value = s.uHasNight!.value;
-      u.uBaseColor!.value.copy(s.uBaseColor!.value);
-      u.uIsGasGiant!.value = s.uIsGasGiant!.value;
-      u.uSeed!.value = s.uSeed!.value;
-      u.uRoughnessDetail!.value = s.uRoughnessDetail!.value;
-    }
-    u.uSunPos!.value.copy(sunVector);
-    u.uCameraPosW!.value.set(0, 0, 0);
-    // Sunlight where it stands, not where the subject stands.
-    u.uIrradiance!.value = Math.min(6, solarIrradiance(len(where)) / 1361);
   }
 
   // -------------------------------------------------------------------------

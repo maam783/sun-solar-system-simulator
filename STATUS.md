@@ -471,3 +471,49 @@ One consequence worth stating: the "it will not offer a speed it could not stop
 from" guarantee now only holds while the throttle is open. Coast into a planet
 and the ship is destroyed, which is what the collision model and the respawn are
 for.
+
+### Thirteenth round — it was the wrong thing
+
+Told plainly: this was built as a flight simulator, with crashes and instruments
+and warnings, and that is not what was wanted. What was wanted is an impressive
+demonstration of the solar system, with the physics real and overridden only
+where the distances make it dull, and with almost nothing on the screen.
+
+Removed outright: the size reference (Earth and the Moon in shot — "Klimbim"),
+and from the default view the reticle, the prograde/retrograde/target markers,
+the collision-course and g-load warnings, the flight panel, the navigation
+panel, the time panel and the mouse hint. What is left on screen is one panel
+listing the sights, and it fades out four seconds after the last input. The
+whole instrument console still exists, unchanged and still exercised by the
+scenarios, on the backquote key.
+
+Fullscreen on **F**, which is the actual answer to "I am always looking at the
+universe through a browser window".
+
+Sound, which the demo had none of: a very quiet ambient bed, a ship hum, an
+occasional hull creak, and a drive that is audible *only while the engine is
+burning* — so the long coasting stretches are silent, which is the physics said
+a second way. Generated with ElevenLabs; levels are deliberately low.
+
+The radio beacon is synthesised rather than sampled, from the real Quindar
+tones (2,525 Hz key, 2,475 Hz unkey, 250 ms) with band-limited noise for the
+open circuit. Apollo's air-to-ground audio is public domain and would have been
+easy to drop in, but a recognisable quotation from one lunar mission fights a
+view of Saturn instead of dressing it.
+
+Also corrected from the round before: "coasting" was the wrong word for what
+happens off the throttle. Measured over 150 s, the inertial speed changes by
++0.06 m/s in 150,124 — four parts in ten million, and upward, which is
+integrator round-off. Nothing decays. The 0.8 m/s the readout loses over that
+time is Earth accelerating around the Sun underneath a speed quoted relative
+to it.
+
+The atmosphere shells were also wrong, and visibly so: brightest exactly at
+their own geometric edge, which made a hard, nearly opaque grey collar and put
+the sphere's polygon edges in the one place they would show. They now fade
+exponentially with the height the line of sight grazes at, so the haze is gone
+well inside the mesh boundary. Peak contribution fell from 142 to 34 of 255 per
+channel. The shell also follows the planet's LOD now instead of sitting at 48
+segments while the planet went to 256 — though honesty demands the note that
+the segment count alone did not measurably move the visible edge in testing
+(0.69 px of ripple against 0.68 px), so the fade is what did the work.

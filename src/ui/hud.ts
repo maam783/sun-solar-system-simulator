@@ -112,9 +112,33 @@ export class Hud {
    */
   simple = true;
 
+  private idleAt = 0;
+
   constructor(private readonly callbacks: HudCallbacks) {
     this.root = document.getElementById('hud')!;
     this.build();
+    this.watchIdle();
+  }
+
+  /**
+   * Fade the panel out when the pilot stops reaching for it.
+   *
+   * Anything permanently drawn over the window is a thing between the eye and
+   * the view. Four seconds after the last input there is nothing on screen at
+   * all, and the first flicker of the mouse brings it back.
+   */
+  private watchIdle(): void {
+    const wake = (): void => {
+      this.idleAt = performance.now() + 4000;
+      this.root.classList.remove('idle');
+    };
+    for (const event of ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const) {
+      window.addEventListener(event, wake, { passive: true });
+    }
+    wake();
+    setInterval(() => {
+      if (performance.now() > this.idleAt) this.root.classList.add('idle');
+    }, 500);
   }
 
   private field(key: string): HTMLElement {
@@ -262,13 +286,6 @@ export class Hud {
     const scale = el('div', 'scalenote', '');
     panel.appendChild(scale);
     this.fields.set('flybyScale', scale);
-
-    // The comparison itself lives in the scene, not here — a diagram in a
-    // panel is a fact about the size, not an experience of it. This line only
-    // owns up to the object being there.
-    const refNote = el('div', 'refnote', '');
-    panel.appendChild(refNote);
-    this.fields.set('flybyRefNote', refNote);
 
     const bar = el('div', 'bar');
     const fill = el('div', 'fill warn');
@@ -551,19 +568,8 @@ export class Hud {
         + (subjectId === 'earth' ? '' : ` · ${earths.toFixed(earths < 10 ? 1 : 0)} × Earth`);
       scaleNote.style.display = '';
 
-      const refId = flyby.route.scaleReference;
-      const refNote = this.field('flybyRefNote');
-      if (refId) {
-        // Short, because it has to stay: it is the one object in the whole
-        // simulation that was put there, and that should not go unsaid.
-        refNote.textContent = `${getBody(refId).name} in orbit — to scale, and not really there.`;
-        refNote.style.display = '';
-      } else {
-        refNote.style.display = 'none';
-      }
     } else {
       scaleNote.style.display = 'none';
-      this.field('flybyRefNote').style.display = 'none';
     }
     this.buttons.get('flybyCancel')!.style.display = flyby.active ? '' : 'none';
     for (const route of FLYBY_ROUTES) {

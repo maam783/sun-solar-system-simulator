@@ -18,6 +18,9 @@ export interface InputActions {
   killRelativeVelocity: () => void;
   cycleTarget: (delta: number) => void;
   toggleHelp: () => void;
+  toggleFullscreen: () => void;
+  toggleMute: () => void;
+  toggleConsole: () => void;
   toggleAutopilot: () => void;
   toggleOverride: () => void;
   setAccelPreset: (index: number) => void;
@@ -97,6 +100,11 @@ export class InputController {
         case 'Tab': this.actions.cycleTarget(event.shiftKey ? -1 : 1); break;
         case 'KeyT': this.actions.cycleTarget(event.shiftKey ? -1 : 1); break;
         case 'KeyH': this.actions.toggleHelp(); break;
+        case 'KeyF': this.actions.toggleFullscreen(); break;
+        case 'KeyM': this.actions.toggleMute(); break;
+        // The whole instrument console, for anyone who wants it, on the key it
+        // lives on in every other program that has one.
+        case 'Backquote': this.actions.toggleConsole(); break;
         case 'KeyN': this.actions.toggleAutopilot(); break;
         case 'KeyO': this.actions.toggleOverride(); break;
         case 'KeyG': this.actions.toggleFlightAssist(); break;

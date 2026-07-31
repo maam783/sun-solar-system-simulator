@@ -78,11 +78,25 @@
   #timepanel { bottom: 12px; right: 12px; width: 262px; }
 
   /* Simple view: one panel of instruments, the sights, and nothing else. */
+  /* The default view is the view. Nothing is drawn over the window except the
+     one panel you steer from, and that fades out while you fly. */
   #hud.simple #nav,
   #hud.simple #timepanel,
+  #hud.simple #console,
+  #hud.simple #flight,
   #hud.simple #markers,
+  #hud.simple #warnings,
+  #hud.simple #reticle,
+  #hud.simple #mousehint,
   #hud.simple .full { display: none !important; }
-  #hud.simple #reticle { opacity: 0.22; }
+
+  /* Idle fade: the panel is there when you reach for it and gone when you are
+     looking at something. */
+  #hud.simple #sights {
+    transition: opacity 900ms ease;
+    opacity: 1;
+  }
+  #hud.simple.idle #sights { opacity: 0; pointer-events: none; }
 
   /* Engineering readouts stay out of the way until asked for. */
   #hud:not(.advanced) .adv { display: none !important; }
@@ -195,12 +209,6 @@
     opacity: 0.75;
   }
 
-  .refnote {
-    margin-top: 4px;
-    font-size: 9px;
-    line-height: 1.45;
-    color: var(--hud-dim);
-  }
 
   #mousehint {
     position: absolute;

@@ -1,0 +1,209 @@
+/**
+ * Sound.
+ *
+ * Three quiet things and nothing else: the ship, the drive, and the room the
+ * whole thing happens in.
+ *
+ * The drive is the one that carries information. It is silent unless the engine
+ * is actually firing, which means the long coasting stretches are silent too —
+ * the same fact the physics states, said a second way. A pilot hears when they
+ * are spending energy and hears when they are not.
+ *
+ * Everything is deliberately under-mixed. This is a room tone for a view, not a
+ * score; if it is the thing you notice, it is too loud.
+ *
+ * Web Audio rather than <audio> elements, for two reasons: gain can be ramped
+ * smoothly instead of stepped per frame, and a looping buffer can be told to
+ * repeat *inside* its own ends, which skips the encoder padding that makes a
+ * looped MP3 tick once a bar.
+ */
+
+const FILES = ['ambient', 'hum', 'drive', 'creak'] as const;
+type Clip = (typeof FILES)[number];
+
+/** Steady-state levels. The drive's is its maximum, at full throttle. */
+const LEVEL: Record<Clip, number> = {
+  ambient: 0.20,
+  hum: 0.085,
+  drive: 0.16,
+  creak: 0.10,
+};
+
+export class Ambience {
+  private ctx: AudioContext | null = null;
+  private master: GainNode | null = null;
+  private buffers = new Map<Clip, AudioBuffer>();
+  private gains = new Map<Clip, GainNode>();
+  private started = false;
+  private nextCreak = 0;
+  private nextBeacon = 0;
+
+  muted = false;
+  /** True once the browser has let us make a sound. */
+  get running(): boolean { return this.started; }
+
+  constructor(private readonly basePath = './assets/audio') {}
+
+  /**
+   * Start on a user gesture, which is the only time a browser will allow it.
+   * Safe to call repeatedly; only the first call does anything.
+   */
+  async start(): Promise<void> {
+    if (this.started) return;
+    this.started = true;
+    try {
+      const Ctor = window.AudioContext
+        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      this.ctx = new Ctor();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0;
+      this.master.connect(this.ctx.destination);
+
+      await Promise.all(FILES.map((name) => this.load(name)));
+
+      this.loop('ambient');
+      this.loop('hum');
+      this.loop('drive', 0);
+      // Fade the whole thing up over a few seconds, so it arrives rather than
+      // starts.
+      this.master.gain.linearRampToValueAtTime(1, this.ctx.currentTime + 4);
+      this.nextCreak = this.ctx.currentTime + 30;
+      this.nextBeacon = this.ctx.currentTime + 55;
+    } catch {
+      // No audio is a perfectly good outcome; nothing else depends on it.
+      this.ctx = null;
+    }
+  }
+
+  private async load(name: Clip): Promise<void> {
+    const response = await fetch(`${this.basePath}/${name}.mp3`);
+    if (!response.ok) throw new Error(`no audio ${name}`);
+    this.buffers.set(name, await this.ctx!.decodeAudioData(await response.arrayBuffer()));
+  }
+
+  private loop(name: Clip, level = LEVEL[name]): void {
+    const buffer = this.buffers.get(name);
+    if (!buffer || !this.ctx || !this.master) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    // Stay clear of both ends: MP3 carries encoder padding there, and looping
+    // through it is an audible click every time round.
+    source.loopStart = Math.min(0.4, buffer.duration * 0.05);
+    source.loopEnd = Math.max(source.loopStart + 0.1, buffer.duration - 0.4);
+    const gain = this.ctx.createGain();
+    gain.gain.value = level;
+    source.connect(gain).connect(this.master);
+    source.start();
+    this.gains.set(name, gain);
+  }
+
+  /**
+   * `thrust` is 0 to 1. Everything else the ship does is silent, because in
+   * the absence of an engine burn there is nothing to hear.
+   */
+  update(thrust: number, dt: number): void {
+    if (!this.ctx || !this.master) return;
+    const drive = this.gains.get('drive');
+    if (drive) {
+      const target = this.muted ? 0 : LEVEL.drive * Math.min(1, Math.max(0, thrust));
+      // A short ramp rather than a jump: a drive that snaps on sounds like a
+      // switch, and this one is meant to sound like mass being pushed.
+      const k = 1 - Math.exp(-dt / 0.45);
+      drive.gain.value += (target - drive.gain.value) * k;
+    }
+    this.master.gain.value = this.muted
+      ? Math.max(0, this.master.gain.value - dt * 2)
+      : this.master.gain.value;
+
+    // The hull, occasionally, and never twice close together.
+    if (this.ctx.currentTime > this.nextCreak) {
+      this.nextCreak = this.ctx.currentTime + 45 + Math.random() * 90;
+      this.oneShot('creak');
+    }
+    // Somebody on a distant circuit, rarely enough that it is still an event.
+    if (this.ctx.currentTime > this.nextBeacon) {
+      this.nextBeacon = this.ctx.currentTime + 70 + Math.random() * 150;
+      this.beacon();
+    }
+  }
+
+  /**
+   * A distant radio beacon, in the one form of it that is genuinely authentic.
+   *
+   * Apollo's air-to-ground tapes are public domain and could simply be played,
+   * but the voices are the wrong thing: "Tranquility Base" is a quotation, it is
+   * recognised instantly, and it belongs to one specific place three days from
+   * Earth — hearing it while rounding Saturn breaks the shot rather than
+   * dressing it. What carries the texture is the *signalling*, and that can be
+   * reproduced exactly rather than sampled.
+   *
+   * These are the real Quindar tones: 2,525 Hz to key the transmitter and
+   * 2,475 Hz to unkey it, 250 ms each, sent in-band on the voice circuit
+   * because the ground link had no separate channel for them. Between them,
+   * the circuit itself — noise through a 300-3,000 Hz voice band, which is why
+   * the loops sound the way they do. No words, so nothing to recognise and
+   * nothing to date it: just somebody, somewhere, holding a channel open.
+   */
+  private beacon(): void {
+    if (!this.ctx || !this.master || this.muted) return;
+    const t0 = this.ctx.currentTime;
+    const bus = this.ctx.createGain();
+    bus.gain.value = 0.05;
+    bus.connect(this.master);
+
+    const tone = (freq: number, at: number): void => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(0.5, at + 0.01);
+      gain.gain.setValueAtTime(0.5, at + 0.24);
+      gain.gain.linearRampToValueAtTime(0, at + 0.25);
+      osc.connect(gain).connect(bus);
+      osc.start(at);
+      osc.stop(at + 0.3);
+    };
+
+    const speech = 1.5 + Math.random() * 3;
+    tone(2525, t0);
+    tone(2475, t0 + 0.25 + speech);
+
+    // The open circuit in between.
+    const frames = Math.ceil(this.ctx.sampleRate * speech);
+    const buffer = this.ctx.createBuffer(1, frames, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < frames; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const band = this.ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 1200;
+    band.Q.value = 0.7;
+    const level = this.ctx.createGain();
+    level.gain.value = 0.35;
+    noise.connect(band).connect(level).connect(bus);
+    noise.start(t0 + 0.25);
+  }
+
+  private oneShot(name: Clip): void {
+    const buffer = this.buffers.get(name);
+    if (!buffer || !this.ctx || !this.master || this.muted) return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = LEVEL[name];
+    source.connect(gain).connect(this.master);
+    source.start();
+  }
+
+  toggleMute(): boolean {
+    this.muted = !this.muted;
+    if (this.master && this.ctx) {
+      this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.master.gain.linearRampToValueAtTime(this.muted ? 0 : 1, this.ctx.currentTime + 0.4);
+    }
+    return this.muted;
+  }
+}
