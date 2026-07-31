@@ -15,7 +15,8 @@ Used to validate the orbital elements. Public domain (NASA/JPL-Caltech).
 
 ## Audio
 
-`audio/ambient.mp3`, `audio/hum.mp3`, `audio/drive.mp3`, `audio/creak.mp3` were
+`audio/ambient.mp3`, `audio/hum.mp3`, `audio/drive.mp3`, `audio/creak.mp3`,
+`audio/rcs.mp3`, `audio/warp.mp3` and `audio/rumble.mp3` were
 generated with ElevenLabs (music and sound-effects models) for this project.
 
 The radio beacon is not a recording. It is synthesised at run time from the real

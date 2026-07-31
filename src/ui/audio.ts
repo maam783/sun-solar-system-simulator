@@ -18,15 +18,31 @@
  * looped MP3 tick once a bar.
  */
 
-const FILES = ['ambient', 'hum', 'drive', 'creak'] as const;
+const FILES = ['ambient', 'hum', 'drive', 'creak', 'rcs', 'warp', 'rumble'] as const;
 type Clip = (typeof FILES)[number];
 
-/** Steady-state levels. The drive's is its maximum, at full throttle. */
+/**
+ * Playback gains, set against the measured level of each file rather than by
+ * ear — the first mix was chosen blind and came out with only three of the
+ * sounds audible at all.
+ *
+ * The files sit at wildly different levels: the hum is a hot -4.8 dBFS, the
+ * ambient bed -16, and the first hull creak was -39, which after a gain of 0.1
+ * put it at -59 dBFS and simply never happened. These numbers bring them into
+ * the same range, with the drive deliberately the loudest thing the ship does
+ * because it is the only one that means anything.
+ */
 const LEVEL: Record<Clip, number> = {
-  ambient: 0.20,
-  hum: 0.085,
-  drive: 0.16,
-  creak: 0.10,
+  ambient: 0.26,
+  hum: 0.10,
+  drive: 0.40,
+  // The regenerated creak still lands at -34 dBFS in the file, so it needs a
+  // gain above one to sit anywhere near the rest. Peak is 0.16, so 2.2 is
+  // nowhere near clipping.
+  creak: 2.2,
+  rcs: 0.30,
+  warp: 0.45,
+  rumble: 0.50,
 };
 
 export class Ambience {
@@ -37,6 +53,7 @@ export class Ambience {
   private started = false;
   private nextCreak = 0;
   private nextBeacon = 0;
+  private nextRumble = 0;
 
   muted = false;
   /** True once the browser has let us make a sound. */
@@ -69,7 +86,7 @@ export class Ambience {
       // starts.
       this.master.gain.linearRampToValueAtTime(1, this.ctx.currentTime + 4);
       this.nextCreak = this.ctx.currentTime + 30;
-      this.nextBeacon = this.ctx.currentTime + 55;
+      this.nextBeacon = this.ctx.currentTime + 95;
     } catch {
       // No audio is a perfectly good outcome; nothing else depends on it.
       this.ctx = null;
@@ -99,11 +116,18 @@ export class Ambience {
     this.gains.set(name, gain);
   }
 
+  /** Fired when the ship is steered, when the override engages, and so on. */
+  event(name: 'rcs' | 'warp' | 'rumble'): void {
+    this.oneShot(name);
+  }
+
   /**
-   * `thrust` is 0 to 1. Everything else the ship does is silent, because in
-   * the absence of an engine burn there is nothing to hear.
+   * `thrust` is 0 to 1. `nearness` is 0 far away and 1 skimming a surface, and
+   * is the one sound here that is pure licence: nothing carries through vacuum.
+   * It is included because passing a thing that size ought to be felt, and a
+   * sub-bass swell is how that is done everywhere else.
    */
-  update(thrust: number, dt: number): void {
+  update(thrust: number, dt: number, nearness = 0): void {
     if (!this.ctx || !this.master) return;
     const drive = this.gains.get('drive');
     if (drive) {
@@ -119,12 +143,17 @@ export class Ambience {
 
     // The hull, occasionally, and never twice close together.
     if (this.ctx.currentTime > this.nextCreak) {
-      this.nextCreak = this.ctx.currentTime + 45 + Math.random() * 90;
+      this.nextCreak = this.ctx.currentTime + 35 + Math.random() * 70;
       this.oneShot('creak');
+    }
+    // Close to something enormous.
+    if (nearness > 0.35 && this.ctx.currentTime > this.nextRumble) {
+      this.nextRumble = this.ctx.currentTime + 25;
+      this.oneShot('rumble', LEVEL.rumble * nearness);
     }
     // Somebody on a distant circuit, rarely enough that it is still an event.
     if (this.ctx.currentTime > this.nextBeacon) {
-      this.nextBeacon = this.ctx.currentTime + 70 + Math.random() * 150;
+      this.nextBeacon = this.ctx.currentTime + 150 + Math.random() * 260;
       this.beacon();
     }
   }
@@ -150,7 +179,7 @@ export class Ambience {
     if (!this.ctx || !this.master || this.muted) return;
     const t0 = this.ctx.currentTime;
     const bus = this.ctx.createGain();
-    bus.gain.value = 0.05;
+    bus.gain.value = 0.028;
     bus.connect(this.master);
 
     const tone = (freq: number, at: number): void => {
@@ -187,13 +216,13 @@ export class Ambience {
     noise.start(t0 + 0.25);
   }
 
-  private oneShot(name: Clip): void {
+  private oneShot(name: Clip, level = LEVEL[name]): void {
     const buffer = this.buffers.get(name);
     if (!buffer || !this.ctx || !this.master || this.muted) return;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     const gain = this.ctx.createGain();
-    gain.gain.value = LEVEL[name];
+    gain.gain.value = level;
     source.connect(gain).connect(this.master);
     source.start();
   }

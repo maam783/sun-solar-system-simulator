@@ -104,6 +104,11 @@ export const AUTOPILOT = {
 export const RENDER = {
   /** Vertical field of view, degrees. */
   fov: 60 as number,
+  /**
+   * Widest the view is allowed to be *across* the frame, degrees. Beyond about
+   * this a rectilinear projection stretches anything near the edge badly.
+   */
+  fovHorizontalCap: 72,
   fovMin: 20,
   fovMax: 100,
   near: 1,

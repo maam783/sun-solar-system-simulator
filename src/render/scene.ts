@@ -114,6 +114,7 @@ export class SolarSystemRenderer {
    * deliberately partial, so the outer system still reads as dimmer rather
    * than being flattened to look like Earth orbit.
    */
+  private requestedFov = RENDER.fov;
   private exposure = 1;
   private lastWidth = 0;
   private lastHeight = 0;
@@ -427,11 +428,37 @@ export class SolarSystemRenderer {
     const height = Math.max(1, this.canvas.clientHeight || window.innerHeight);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.applyFov();
   }
 
   setFov(fov: number): void {
-    this.camera.fov = Math.max(RENDER.fovMin, Math.min(RENDER.fovMax, fov));
+    this.requestedFov = Math.max(RENDER.fovMin, Math.min(RENDER.fovMax, fov));
+    this.applyFov();
+  }
+
+  /**
+   * Field of view, capped across the frame rather than down it.
+   *
+   * three's camera takes a *vertical* angle, so on a wide window the horizontal
+   * field is whatever the aspect ratio makes it: 60 degrees down a 16:9 frame is
+   * 91 across, and on a 21:9 monitor it is past 100. That is the far edge of a
+   * rectilinear projection, where a sphere is stretched sideways by 1/cos of its
+   * angle off the axis — measured at 1.24 near the edge, which is exactly the
+   * "the planet gets distorted" that was reported. It is not a bug in the
+   * projection; it is what a very wide rectilinear lens does, and the fix is to
+   * stop asking for one.
+   *
+   * So the horizontal angle is capped and the vertical follows from it. Narrow
+   * windows are unaffected, and a route that asks for a long lens still gets it.
+   */
+  private applyFov(): void {
+    const maxHorizontal = (RENDER.fovHorizontalCap * Math.PI) / 180;
+    const wanted = (this.requestedFov * Math.PI) / 180;
+    const horizontal = 2 * Math.atan(Math.tan(wanted / 2) * this.camera.aspect);
+    const vertical = horizontal <= maxHorizontal
+      ? wanted
+      : 2 * Math.atan(Math.tan(maxHorizontal / 2) / this.camera.aspect);
+    this.camera.fov = (vertical * 180) / Math.PI;
     this.camera.updateProjectionMatrix();
   }
 

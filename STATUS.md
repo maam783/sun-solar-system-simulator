@@ -581,3 +581,42 @@ manifest alone is not enough. There is one now, network-first with the cache as
 a fallback, so the installed app also opens without a network. `display` is
 `standalone`, which is the value desktop browsers actually act on, with
 `fullscreen` offered ahead of it through `display_override`.
+
+### Sixteenth round — a wide lens, a stale worker, and a mix set blind
+
+Three reports, and the diagnosis differs for each.
+
+**"No parallax, the planet is stuck to the star wallpaper."** The parallax is
+correct and was measured: translating the ship three Mars radii sideways moves
+the planet 0.487 in screen coordinates while the stars move **0.000** — the
+planet slides across a fixed field, which is what the stars being at parsecs
+means. But dragging to look is *pure rotation*, and rotation produces no
+parallax anywhere in the universe. Nothing to fix there.
+
+**"And it gets distorted."** That one is real, and it is the field of view.
+three takes a *vertical* angle, so the horizontal follows from the window: 60
+degrees down a 16:9 frame is 91 across, and the reported screenshot was wider
+still. Rectilinear projection stretches anything off-axis by 1/cos of its angle,
+and it was measured at **1.241** near the edge — while the centre came out at
+1.000, so the aspect handling was never wrong. The horizontal angle is now
+capped at 72 degrees with the vertical derived from it, which brings edge
+stretch to **1.118** and, more usefully, makes it the same on every window shape
+instead of worsening with width.
+
+**"The installed app keeps running the old build."** Mine, and a bad call: the
+service worker existed only to make the browser offer to install the page, and
+it cached the document as well. An installed copy therefore kept starting the
+build it was installed with. The document is never cached now, and is fetched
+with the HTTP cache bypassed as well, because Pages serves HTML with ten
+minutes of freshness. Only content-hashed assets are kept. The page also asks
+for an update on every start and reloads once when a new worker takes over.
+
+**"There is one ambient loop, a beep and a hiss, and that is all."** Measured
+rather than guessed. The files were fine; the mix was not, having been set
+blind: the hull creak sat at -39 dBFS in the file and -59 after its gain, so it
+never happened, and the radio beacon was the most prominent thing in a mix
+where it should be the rarest. Levels are now set against each file's measured
+loudness, and there are three new sounds tied to things that actually occur —
+a cold-gas puff on steering, a spool-up on the override drive, and a sub-bass
+swell when passing close to something enormous. The beacon is a third as loud
+and roughly half as frequent.

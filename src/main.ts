@@ -153,7 +153,7 @@ const input = new InputController(canvas, {
   toggleAutopilot: engageAutopilot,
   toggleOverride: () => {
     if (world.ship.mode === 'override') world.setNormalMode();
-    else world.setOverrideStage(world.ship.overrideStage);
+    else { world.setOverrideStage(world.ship.overrideStage); ambience.event('warp'); }
   },
   setAccelPreset: (index) => {
     const value = AUTOPILOT.accelPresets[index];
@@ -199,7 +199,19 @@ for (const event of ['pointerdown', 'keydown'] as const) {
 // and it is what lets the installed app open without a network.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('./sw.js').catch(() => {});
+    void navigator.serviceWorker.register('./sw.js').then((registration) => {
+      // Ask on every start, so an installed copy picks up a new build rather
+      // than waiting for the browser to get round to checking.
+      void registration.update();
+    }).catch(() => {});
+  });
+  // When a new worker takes over, the page in front of it is still running the
+  // old build. Reload it, once.
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
   });
 }
 
@@ -216,6 +228,7 @@ let fpsAccumulator = 0;
 let fpsFrames = 0;
 let fps = 60;
 let wasDestroyed = false;
+let wasSteering = false;
 
 const scenario = installScenario();
 
@@ -288,7 +301,17 @@ const frame = (now: number): void => {
   // actually burning — so coasting is silent, which is the physics said aloud.
   const burning = world.flightModel === 'pilot' && !world.flyby.active
     && (world.pilot.engaged || (world.pilot.stopping && world.referenceSpeed() > 5));
-  ambience.update(burning ? 1 : 0, dtReal);
+  // Nearness is one at a surface and nothing past a few radii out.
+  const radius = getBody(world.nearest.id).radius;
+  const nearness = Math.max(0, Math.min(1,
+    1 - world.nearest.altitude / (radius * 2.5)));
+  ambience.update(burning ? 1 : 0, dtReal, nearness);
+
+  // Steering has a voice of its own: a puff of cold gas, once per press.
+  const steering = input.isHeld('ArrowUp') || input.isHeld('ArrowDown')
+    || input.isHeld('ArrowLeft') || input.isHeld('ArrowRight');
+  if (steering && !wasSteering) ambience.event('rcs');
+  wasSteering = steering;
 
   hud.update(world, renderer, fps, input.pointerLocked);
   scenario?.afterFrame();
