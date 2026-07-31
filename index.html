@@ -77,6 +77,13 @@
   #console { bottom: 12px; left: 12px; min-width: 300px; }
   #timepanel { bottom: 12px; right: 12px; width: 262px; }
 
+  /* Simple view: one panel of instruments, the sights, and nothing else. */
+  #hud.simple #nav,
+  #hud.simple #timepanel,
+  #hud.simple #markers,
+  #hud.simple .full { display: none !important; }
+  #hud.simple #reticle { opacity: 0.22; }
+
   /* Engineering readouts stay out of the way until asked for. */
   #hud:not(.advanced) .adv { display: none !important; }
   #hud:not(.advanced) #console .row,

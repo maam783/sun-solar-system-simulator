@@ -37,6 +37,12 @@ export interface FlybyRoute {
   body: string;
   /** Body the camera looks at. Defaults to `body`. */
   subject?: string;
+  /**
+   * Field of view for this shot, degrees. A cinematographer changes lenses;
+   * so does this. Earth is only 1.8 degrees wide from the Moon, so the famous
+   * Earthrise frame needs a long lens or it is a speck.
+   */
+  fov?: number;
   stops: FlybyStop[];
 }
 
@@ -75,12 +81,22 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     blurb: 'Hold behind the lunar limb and let Earth climb over it.',
     body: 'moon',
     subject: 'earth',
+    // Long lens: Earth spans 1.8 degrees from here, so a normal field of view
+    // makes it a speck above an enormous grey horizon.
+    //
+    // The track has to stay close to the line where Earth grazes the limb.
+    // Climbing further out does clear Earth of the Moon, but it also swings
+    // the limb outside a long lens, and an Earthrise without the horizon it
+    // rises over is just a small blue dot. Earth is hidden while the sideways
+    // offset is under one radius and clear past it, so the shot lives in the
+    // narrow band either side of that.
+    fov: 24,
     stops: [
-      { at: [-2.3, -0.5, 0.35], seconds: 0 },
-      { at: [-1.65, 0.15, 0.16], seconds: 12 },
-      { at: [-1.45, 0.95, 0.07], seconds: 12 },
-      { at: [-1.5, 1.7, 0.03], seconds: 10 },
-      { at: [-2.0, 2.8, 0.06], seconds: 12 },
+      { at: [-1.46, -0.30, 0.10], seconds: 0 },
+      { at: [-1.45, 0.25, 0.06], seconds: 12 },
+      { at: [-1.45, 0.80, 0.03], seconds: 12 },
+      { at: [-1.45, 1.08, 0.02], seconds: 10 },
+      { at: [-1.46, 1.32, 0.02], seconds: 12 },
     ],
   },
   {
@@ -89,6 +105,7 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     blurb: 'Round the volcanic moon with Jupiter filling twenty degrees of sky.',
     body: 'io',
     subject: 'jupiter',
+    fov: 42,
     stops: [
       { at: [-4.5, -3.2, 1.1], seconds: 0 },
       { at: [-2.3, -1.3, 0.45], seconds: 12 },
@@ -214,6 +231,8 @@ const splineAt = (stops: readonly FlybyStop[], u: number, out: number[]): void =
 };
 
 const scratchAt = [0, 0, 0];
+const lengthA = [0, 0, 0];
+const lengthB = [0, 0, 0];
 
 export class FlybyDirector {
   active = false;
@@ -222,8 +241,20 @@ export class FlybyDirector {
   elapsed = 0;
   message = '';
 
-  private cumulative: number[] = [];
   private total = 0;
+  /**
+   * Arc-length lookup: `distance[i]` is how far along the path `param[i]` is.
+   *
+   * A Catmull-Rom spline does not travel at a constant rate in its own
+   * parameter — it slows through tight corners and races down straight legs.
+   * Driving it by parameter therefore surges and stalls, which is exactly what
+   * a flypast must not do. Walking this table instead means equal time buys
+   * equal distance, so the only speed changes left are the ones the shot asks
+   * for.
+   */
+  private param: number[] = [];
+  private distance: number[] = [];
+  private totalLength = 0;
 
   start(route: FlybyRoute): void {
     this.route = route;
@@ -231,13 +262,32 @@ export class FlybyDirector {
     this.elapsed = 0;
     this.message = route.name;
 
-    this.cumulative = [0];
-    let sum = 0;
-    for (let i = 1; i < route.stops.length; i++) {
-      sum += route.stops[i]!.seconds;
-      this.cumulative.push(sum);
+    // Authored times set how long the shot lasts; the arc-length table decides
+    // where the ship is at each moment within it.
+    let authored = 0;
+    for (let i = 1; i < route.stops.length; i++) authored += route.stops[i]!.seconds;
+    this.total = authored;
+
+    const SAMPLES = 600;
+    const span = route.stops.length - 1;
+    this.param = [0];
+    this.distance = [0];
+    let acc = 0;
+    splineAt(route.stops, 0, lengthA);
+    for (let k = 1; k <= SAMPLES; k++) {
+      const u = (k / SAMPLES) * span;
+      splineAt(route.stops, u, lengthB);
+      acc += Math.hypot(
+        lengthB[0]! - lengthA[0]!,
+        lengthB[1]! - lengthA[1]!,
+        lengthB[2]! - lengthA[2]!);
+      lengthA[0] = lengthB[0]!;
+      lengthA[1] = lengthB[1]!;
+      lengthA[2] = lengthB[2]!;
+      this.param.push(u);
+      this.distance.push(acc);
     }
-    this.total = sum;
+    this.totalLength = acc;
   }
 
   stop(): void {
@@ -250,21 +300,53 @@ export class FlybyDirector {
     return this.total > 0 ? Math.min(1, this.elapsed / this.total) : 0;
   }
 
-  /** Segment coordinate for a time in seconds. */
+  /**
+   * Segment coordinate for a time in seconds.
+   *
+   * The easing is applied once, across the whole route — accelerate away at
+   * the start, coast, settle at the end. Easing each leg separately (which is
+   * the obvious thing to write) brings the ship to a standstill at every
+   * waypoint, so the flypast surges and stalls its way past the planet instead
+   * of sweeping.
+   */
   private segmentAt(seconds: number): number {
-    const c = this.cumulative;
-    if (seconds <= 0) return 0;
-    for (let i = 1; i < c.length; i++) {
-      if (seconds <= c[i]!) {
-        const span = c[i]! - c[i - 1]!;
-        const f = span > 0 ? (seconds - c[i - 1]!) / span : 0;
-        // Ease each leg so the ship arrives and leaves smoothly rather than
-        // snapping direction at every waypoint.
-        const eased = f * f * (3 - 2 * f);
-        return i - 1 + eased;
-      }
+    if (this.total <= 0 || this.totalLength <= 0) return 0;
+
+    const u = Math.max(0, Math.min(1, seconds / this.total));
+
+    // Speed profile: ramp up over the first fifth, hold, ramp down over the
+    // last. `eased` is its integral, so the ship accelerates away, sweeps past
+    // at a steady rate, and settles at the end.
+    const edge = 0.2;
+    const rampDistance = edge / 2;
+    const cruiseDistance = 1 - 2 * edge;
+    let eased: number;
+    if (u < edge) {
+      eased = (u * u) / (2 * edge);
+    } else if (u > 1 - edge) {
+      const remaining = 1 - u;
+      eased = rampDistance + cruiseDistance + rampDistance
+        - (remaining * remaining) / (2 * edge);
+    } else {
+      eased = rampDistance + (u - edge);
     }
-    return c.length - 1;
+    // The two ramps together cover one `edge` less ground than a constant run,
+    // so normalise to keep the route ending exactly at its last waypoint.
+    eased /= 1 - edge;
+
+    // Eased progress is a fraction of the *distance*, looked up in the table.
+    const target = Math.max(0, Math.min(1, eased)) * this.totalLength;
+    const d = this.distance;
+    let lo = 0;
+    let hi = d.length - 1;
+    while (lo < hi - 1) {
+      const mid = (lo + hi) >> 1;
+      if (d[mid]! <= target) lo = mid;
+      else hi = mid;
+    }
+    const legSpan = d[hi]! - d[lo]!;
+    const f = legSpan > 0 ? (target - d[lo]!) / legSpan : 0;
+    return this.param[lo]! + f * (this.param[hi]! - this.param[lo]!);
   }
 
   /** World position along the route at a given time offset. */

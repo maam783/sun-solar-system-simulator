@@ -11,7 +11,7 @@ import { Hud } from './ui/hud';
 import { InputController } from './ui/input';
 import { World } from './sim/world';
 import { PilotDrive } from './sim/pilot';
-import { AUTOPILOT, RENDER, SHIP, SPEED, WARP } from './config';
+import { AUTOPILOT, RENDER, SHIP, SPEED } from './config';
 import { getBody } from './data/constants';
 import { installDebugApi } from './debug/simApi';
 import { runScenarioFromUrl } from './scenarios/runner';
@@ -232,6 +232,10 @@ const frame = (now: number): void => {
   }
   wasDestroyed = world.ship.destroyed;
 
+  // A route may ask for a different lens; hand the normal one back when it ends.
+  const routeFov = world.flyby.active ? world.flyby.route?.fov : undefined;
+  renderer.setFov(routeFov ?? fov);
+
   renderer.render(world);
   hud.update(world, renderer, fps, input.pointerLocked);
   scenario?.afterFrame();
@@ -247,10 +251,11 @@ function installScenario() {
 
 installDebugApi({ world, renderer, hud, input, getFps: () => fps });
 
+hud.setSimple(true);
+
 document.getElementById('loading')?.classList.add('hide');
 
-hud.setStatus(
-  `Ready. ${WARP.stages.length} warp steps, drive ${(world.ship.maxAccel / 9.80665).toFixed(0)} g. `
-  + 'Press H for controls.');
+hud.setStatus('Pick a flypast, or fly it yourself: mouse to look, W and S for speed, '
+  + 'SPACE to stop. Press H for the full list.');
 
 requestAnimationFrame(frame);

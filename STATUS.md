@@ -141,6 +141,33 @@ One defect the tests caught during this round: `flightModel` defaulted to
 test of a hovering ship. The physics layer now defaults to Newtonian and the
 interactive build opts in.
 
+## Third round: usability
+
+Feedback was that the console was still a wall of contradictory controls
+(PILOT / ORBITAL / ALL STOP next to FLY THERE / ORBIT HERE / STOP, and a
+throttle label that said "station keeping" in one mode and "main drive" in
+another), and that the flypasts surged and stalled.
+
+- **Simple view is now the default**: the flight panel and the sights, nothing
+  else. No navigation panel, no time panel, no prograde/retrograde/target
+  markers jumping about over the view. One button unfolds the full console.
+- **Flypasts no longer pump.** The easing was applied per leg, which brings the
+  ship to a standstill at *every waypoint* — measured at 725, 379 and 544 km/s
+  between peaks of 50,000. Fixed in two steps: one ease across the whole route
+  rather than one per leg, then a full arc-length reparameterisation of the
+  spline, because a Catmull-Rom curve does not travel at a constant rate in its
+  own parameter. Now: zero local minima, cruise speed constant to 1.00.
+- **Earthrise works.** Two separate faults. Earth spans 1.8° from the Moon, so
+  at a 60° field of view it was a 28-pixel speck: routes can now specify a lens,
+  and this one uses 24°. But the real problem was that the camera pointed
+  *straight at Earth* while the track climbed to 2.3 lunar radii off-axis,
+  putting the limb 17° outside the frame — an Earthrise with no horizon to rise
+  over. The track now stays in the narrow band either side of the grazing line,
+  and the limb is in frame 100% of the route.
+- **Impostor sprites were all the same warm yellow** regardless of the body,
+  because the glow texture's own gradient was tinted. It is neutral white now;
+  only the Sun's glare keeps the warm falloff.
+
 ## Known approximations
 
 Deliberate, and documented where they live:

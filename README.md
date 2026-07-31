@@ -32,7 +32,10 @@ the Sun, a low pass across Mars. Each is a camera move about a minute long; the
 ship flies it and points itself at the subject. Nothing to pilot.
 
 **Or fly it yourself.** Flying is four keys: point with the mouse, **W** faster,
-**S** slower, **Space** to stop. The ship holds itself against gravity, so
+**S** slower, **Space** to stop. That is the whole of the simple view — one
+instrument panel and the list of sights. **FULL CONSOLE** unfolds the rest
+(navigation, time warp, orbital elements, the rocket-equation panel) for anyone
+who wants it. The ship holds itself against gravity, so
 letting go of everything leaves you parked next to whatever you were looking at,
 and it will not offer a speed it could not stop from before hitting what it is
 near. That is *PILOT* mode, and it is the default.

@@ -105,6 +105,12 @@ export class Hud {
 
   helpVisible = false;
   advanced = false;
+  /**
+   * Simple is the default. The full console exists, but a first-time pilot
+   * should not have to decide between PILOT, ORBITAL, ALL STOP, FLY THERE,
+   * ORBIT HERE and STOP before they have looked at anything.
+   */
+  simple = true;
 
   constructor(private readonly callbacks: HudCallbacks) {
     this.root = document.getElementById('hud')!;
@@ -128,7 +134,15 @@ export class Hud {
   setAdvanced(on: boolean): void {
     this.advanced = on;
     this.root.classList.toggle('advanced', on);
-    this.buttons.get('advanced')?.classList.toggle('on', on);
+  }
+
+  /** Switch between the one-panel view and the whole console. */
+  setSimple(on: boolean): void {
+    this.simple = on;
+    this.root.classList.toggle('simple', on);
+    this.setAdvanced(!on);
+    const button = this.buttons.get('console');
+    if (button) button.textContent = on ? 'FULL CONSOLE' : 'SIMPLE VIEW';
   }
 
   private build(): void {
@@ -173,7 +187,7 @@ export class Hud {
 
     panel.appendChild(el('div', 'sep'));
     this.addRow(panel, 'reference', 'NEAR');
-    this.addRow(panel, 'altitude', 'ALTITUDE');
+    this.addRow(panel, 'altitude', 'DISTANCE');
     this.addRow(panel, 'mode', 'DRIVE', true);
     this.addRow(panel, 'gload', 'G-LOAD', true);
     this.addRow(panel, 'thrust', 'THRUST', true);
@@ -186,7 +200,7 @@ export class Hud {
     this.addRow(orbitRows, 'periapsis', 'PERIAPSIS');
     this.addRow(orbitRows, 'period', 'PERIOD');
 
-    const modelBtns = el('div', 'btns');
+    const modelBtns = el('div', 'btns full');
     const pilotBtn = button('PILOT', () => this.callbacks.onSetFlightModel('pilot'));
     const orbitalBtn = button('ORBITAL', () => this.callbacks.onSetFlightModel('orbital'));
     this.buttons.set('modelPilot', pilotBtn);
@@ -326,9 +340,12 @@ export class Hud {
     const btns = el('div', 'btns');
     btns.appendChild(button('CONTROLS (H)', () => this.callbacks.onToggleHelp()));
     btns.appendChild(button('RESPAWN (R)', () => this.callbacks.onRespawn()));
-    const adv = button('ENGINEERING', () => this.setAdvanced(!this.advanced));
-    this.buttons.set('advanced', adv);
-    btns.appendChild(adv);
+    const console_ = button('FULL CONSOLE', () => {
+      this.setSimple(!this.simple);
+      if (!this.simple) this.callbacks.onSetFlightModel('pilot');
+    });
+    this.buttons.set('console', console_);
+    btns.appendChild(console_);
     panel.appendChild(btns);
 
     const status = el('div', 'hint', '');
@@ -491,11 +508,11 @@ export class Hud {
       `${Math.max(0, Math.min(1, world.flyby.active ? world.flyby.progress : fraction)) * 100}%`;
     this.field('throttleLabel').textContent = world.flyby.active
       ? `FLYPAST — ${Math.round(world.flyby.progress * 100)}% · ESC to take over`
-      : world.flightModel === 'pilot'
-      ? (world.pilot.cruiseSpeed > 0
-        ? `SET ${formatSpeed(world.pilot.cruiseSpeed)} — W faster · S slower`
-        : 'STATION KEEPING — W to move')
-      : 'ORBITAL — W main drive · S retro';
+      : world.flightModel === 'orbital'
+      ? 'ORBITAL — W main drive · S retro'
+      : world.pilot.cruiseSpeed > 0
+        ? `${formatSpeed(world.pilot.cruiseSpeed)} — W faster · S slower · SPACE stop`
+        : 'HOLDING — W to fly';
     this.buttons.get('modelPilot')!.classList.toggle('on', world.flightModel === 'pilot');
     this.buttons.get('modelOrbital')!.classList.toggle('on', world.flightModel === 'orbital');
 
@@ -595,7 +612,8 @@ export class Hud {
     hint.className = pointerLocked ? 'locked' : '';
 
     this.updateWarnings(world);
-    this.updateMarkers(world, renderer);
+    if (this.simple || world.flyby.active) this.clearMarkers();
+    else this.updateMarkers(world, renderer);
   }
 
   private updateWarnings(world: World): void {
@@ -688,6 +706,12 @@ export class Hud {
         this.markerNodes.delete(key);
       }
     }
+  }
+
+  private clearMarkers(): void {
+    if (this.markerNodes.size === 0) return;
+    for (const node of this.markerNodes.values()) node.remove();
+    this.markerNodes.clear();
   }
 
   setStatus(text: string): void {

@@ -55,19 +55,27 @@ interface BodyView {
   lod: number;
 }
 
-/** Radial-gradient texture used for point sources and the solar glare. */
-const makeGlowTexture = (softness: number): THREE.Texture => {
+/**
+ * Radial-gradient texture for point sources and the solar glare.
+ *
+ * `warm` tints the falloff for the Sun's glare. Everything else gets a neutral
+ * white gradient, so the sprite's own colour decides the hue — otherwise every
+ * distant body reads as the same yellow blob regardless of what it is.
+ */
+const makeGlowTexture = (softness: number, warm = false): THREE.Texture => {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  const mid = warm ? '255,246,224' : '255,255,255';
+  const outer = warm ? '255,230,190' : '255,255,255';
   gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.12 * softness, 'rgba(255,255,255,0.85)');
-  gradient.addColorStop(0.35 * softness, 'rgba(255,246,224,0.28)');
-  gradient.addColorStop(0.7, 'rgba(255,230,190,0.05)');
-  gradient.addColorStop(1, 'rgba(255,220,170,0)');
+  gradient.addColorStop(0.12 * softness, `rgba(${mid},0.85)`);
+  gradient.addColorStop(0.35 * softness, `rgba(${mid},0.28)`);
+  gradient.addColorStop(0.7, `rgba(${outer},0.05)`);
+  gradient.addColorStop(1, `rgba(${outer},0)`);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
   const texture = new THREE.CanvasTexture(canvas);
@@ -260,7 +268,7 @@ export class SolarSystemRenderer {
 
   private buildSunGlare(): void {
     const material = new THREE.SpriteMaterial({
-      map: makeGlowTexture(0.6),
+      map: makeGlowTexture(0.6, true),
       color: new THREE.Color(0xfff2d8),
       transparent: true,
       blending: THREE.AdditiveBlending,
