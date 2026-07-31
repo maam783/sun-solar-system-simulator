@@ -43,6 +43,15 @@ export interface FlybyRoute {
    * Earthrise frame needs a long lens or it is a speck.
    */
   fov?: number;
+  /**
+   * Wait for a date when the subject is lit before starting.
+   *
+   * Earth's phase seen from the Moon depends only on where the Sun is, not on
+   * where the ship sits — so no amount of repositioning rescues an Earthrise
+   * during a new Earth. The clock moves instead. Which real date it is does not
+   * matter to the shot, and the geometry is real on whatever date it lands.
+   */
+  needsLitSubject?: boolean;
   stops: FlybyStop[];
 }
 
@@ -63,16 +72,20 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'jupiter-skim',
-    name: 'Jupiter — over the cloud tops',
-    blurb: 'Down to one and a half radii, where the belts fill the window.',
+    name: 'Jupiter — slingshot',
+    blurb: 'In over the night side, round the limb at 1.5 radii, out into the light.',
     body: 'jupiter',
+    // A wrap rather than a tangent: the ship comes in on the dark side, swings
+    // right round the planet close in, and leaves in a different direction with
+    // the full lit face behind it. The camera holds the planet throughout, so
+    // it turns to look back on its own as the ship departs.
     stops: [
-      { at: [9, -9, 2.4], seconds: 0 },
-      { at: [3.0, -3.0, 0.7], seconds: 13 },
-      { at: [1.55, -0.8, 0.10], seconds: 11 },
-      { at: [1.52, 0.9, 0.05], seconds: 8 },
-      { at: [3.0, 3.2, 0.6], seconds: 11 },
-      { at: [8, 8, 2.0], seconds: 12 },
+      { at: [-6.5, -7.0, 1.6], seconds: 0 },
+      { at: [-2.2, -2.4, 0.45], seconds: 13 },
+      { at: [-0.5, -1.6, 0.10], seconds: 10 },
+      { at: [1.3, -1.15, 0.05], seconds: 9 },
+      { at: [3.2, 1.4, 0.35], seconds: 11 },
+      { at: [7.5, 6.0, 1.4], seconds: 13 },
     ],
   },
   {
@@ -81,6 +94,7 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     blurb: 'Hold behind the lunar limb and let Earth climb over it.',
     body: 'moon',
     subject: 'earth',
+    needsLitSubject: true,
     // Long lens: Earth spans 1.8 degrees from here, so a normal field of view
     // makes it a speck above an enormous grey horizon.
     //
@@ -116,30 +130,30 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'sun-pass',
-    name: 'Solar close pass',
-    blurb: 'Three and a half radii off the photosphere. It fills the window.',
+    name: 'Solar slingshot',
+    blurb: 'All the way round the Sun at three radii. It fills the window.',
     body: 'sun',
     stops: [
-      { at: [15, -15, 3.5], seconds: 0 },
-      { at: [5.5, -5.5, 1.2], seconds: 13 },
-      { at: [3.5, -0.4, 0.25], seconds: 11 },
-      { at: [3.6, 1.6, 0.25], seconds: 7 },
-      { at: [6.0, 6.0, 1.2], seconds: 11 },
-      { at: [15, 14, 3.5], seconds: 12 },
+      { at: [-14, -14, 3.0], seconds: 0 },
+      { at: [-4.5, -4.5, 1.0], seconds: 13 },
+      { at: [-1.0, -3.1, 0.25], seconds: 10 },
+      { at: [2.4, -2.1, 0.15], seconds: 9 },
+      { at: [5.5, 3.0, 0.8], seconds: 11 },
+      { at: [14, 12, 3.0], seconds: 13 },
     ],
   },
   {
     id: 'mars-lowpass',
-    name: 'Mars — low pass',
-    blurb: 'Low across the terminator and out into the night side.',
+    name: 'Mars — slingshot',
+    blurb: 'Round the back of the planet and away with the day side astern.',
     body: 'mars',
     stops: [
-      { at: [5, -5, 1.3], seconds: 0 },
-      { at: [2.1, -1.9, 0.4], seconds: 12 },
-      { at: [1.30, -0.5, 0.07], seconds: 11 },
-      { at: [1.28, 0.7, 0.03], seconds: 8 },
-      { at: [2.5, 2.3, 0.4], seconds: 11 },
-      { at: [5, 5, 1.3], seconds: 11 },
+      { at: [-4.5, -5.0, 1.1], seconds: 0 },
+      { at: [-1.8, -1.9, 0.35], seconds: 12 },
+      { at: [-0.4, -1.35, 0.08], seconds: 10 },
+      { at: [1.1, -0.95, 0.04], seconds: 9 },
+      { at: [2.8, 1.2, 0.3], seconds: 11 },
+      { at: [5.5, 4.5, 1.0], seconds: 12 },
     ],
   },
 ];
@@ -233,6 +247,52 @@ const splineAt = (stops: readonly FlybyStop[], u: number, out: number[]): void =
 const scratchAt = [0, 0, 0];
 const lengthA = [0, 0, 0];
 const lengthB = [0, 0, 0];
+
+const litA = vec();
+const litB = vec();
+
+/**
+ * Fraction of the subject's disc that is lit, seen from the body.
+ * 1 is full, 0 is new.
+ */
+export const litFraction = (bodyId: string, subjectId: string, t: number): number => {
+  ephemeris.position(bodyId, t, litA);
+  ephemeris.position(subjectId, t, litB);
+  // From the subject: one vector to the Sun (at the origin), one to the viewer.
+  const toSunX = -litB.x;
+  const toSunY = -litB.y;
+  const toSunZ = -litB.z;
+  const toViewX = litA.x - litB.x;
+  const toViewY = litA.y - litB.y;
+  const toViewZ = litA.z - litB.z;
+  const ls = Math.hypot(toSunX, toSunY, toSunZ);
+  const lv = Math.hypot(toViewX, toViewY, toViewZ);
+  if (ls === 0 || lv === 0) return 1;
+  const cos = (toSunX * toViewX + toSunY * toViewY + toSunZ * toViewZ) / (ls * lv);
+  return (1 + Math.max(-1, Math.min(1, cos))) / 2;
+};
+
+/**
+ * Search forward for a time when the subject is well lit from the body.
+ * Steps two hours at a time over two months — long enough to cover a lunar
+ * cycle several times over. Returns the original time if nothing better exists.
+ */
+export const findLitTime = (bodyId: string, subjectId: string, t0: number): number => {
+  const STEP = 2 * 3600;
+  const SPAN = 60 * 86400;
+  let best = t0;
+  let bestLit = litFraction(bodyId, subjectId, t0);
+  if (bestLit > 0.75) return t0;
+  for (let dt = STEP; dt <= SPAN; dt += STEP) {
+    const lit = litFraction(bodyId, subjectId, t0 + dt);
+    if (lit > bestLit) {
+      bestLit = lit;
+      best = t0 + dt;
+      if (bestLit > 0.9) break;
+    }
+  }
+  return best;
+};
 
 export class FlybyDirector {
   active = false;

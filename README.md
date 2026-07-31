@@ -25,11 +25,13 @@ date, with the planets where they actually are.
 
 ## Two ways to use it
 
-**Click a flypast.** The *Sights* panel has six of them — through Saturn's
-rings, over Jupiter's cloud tops at 1.04 radii, Earthrise from behind the lunar
-limb, Io with Jupiter filling twenty degrees of sky, three and a half radii off
-the Sun, a low pass across Mars. Each is a camera move about a minute long; the
-ship flies it and points itself at the subject. Nothing to pilot.
+**Click a flypast.** The *Sights* panel has six of them — through Saturn's ring
+plane, slingshots right round Jupiter, Mars and the Sun, Earthrise from behind
+the lunar limb, and Io with Jupiter filling twenty degrees of sky. The
+slingshots come in on the dark side, wrap around the body at a couple of radii
+and leave in a different direction with the lit face astern; the camera holds
+the subject, so it swings round to look back as the ship departs. Each is a
+camera move about a minute long. Nothing to pilot.
 
 **Or fly it yourself.** Flying is four keys: point with the mouse, **W** faster,
 **S** slower, **Space** to stop. That is the whole of the simple view — one

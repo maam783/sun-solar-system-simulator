@@ -168,6 +168,30 @@ another), and that the flypasts surged and stalled.
   because the glow texture's own gradient was tinted. It is neutral white now;
   only the Sun's glare keeps the warm falloff.
 
+## Fourth round: shots and surfaces
+
+- **Three routes are slingshots now** rather than tangential passes. Jupiter,
+  Mars and the Sun each come in on the dark side, wrap right round the body at
+  1.3–2.9 radii and leave in a different direction with the lit face astern.
+  Measured sweep: 174°, 176°, 177°. The camera holds the subject throughout, so
+  it swings round to look back on its own as the ship departs.
+- **Earthrise waits for light.** Earth's phase seen from the Moon depends only
+  on where the Sun is, so no repositioning rescues the shot during a new Earth —
+  the clock moves instead, searching forward in two-hour steps for a date when
+  the subject is well lit. Measured: jumps about 9.5 days, Earth then 90% lit.
+  Which real date it lands on does not matter; the geometry is real on all of
+  them.
+- **The Sun uses its photosphere image.** It was the only body whose texture was
+  skipped, leaving fine 3-D noise as the whole surface — and fine noise aliases
+  into big drifting blotches when the disc is small, then resolves as you close.
+  That reads exactly as "the sunspots are shrinking as I approach". The
+  procedural fallback is coarser now for the same reason.
+- Saturn's ring shadow was **not** a missing section: the shadow cylinder is
+  6.03e7 m across and the rings run to 1.40e8 m, so it covers ±54° of azimuth at
+  the inner edge and ±25° at the outer — a wedge that narrows outward, which is
+  what Cassini photographs show. Shadowed ring material was being taken down to
+  6% brightness though, which reads as a hole; it sits at 14% now.
+
 ## Known approximations
 
 Deliberate, and documented where they live:

@@ -16,7 +16,7 @@ import { WarpController } from './warp';
 import { Autopilot } from './autopilot';
 import { HohmannTransfer } from './hohmann';
 import { PilotDrive } from './pilot';
-import { FlybyDirector, type FlybyRoute } from './flyby';
+import { FlybyDirector, findLitTime, type FlybyRoute } from './flyby';
 import {
   selectActiveBodies, dominantBody, nearestSurface, gravityAccel,
   type ActiveBody, type DominantBody,
@@ -269,6 +269,12 @@ export class World {
     this.warp.reset();
     this.paused = false;
     this.ship.destroyed = false;
+    if (route.needsLitSubject && route.subject) {
+      // Move to a date when the shot is actually lit, rather than showing a
+      // new Earth and calling it an Earthrise.
+      this.clock.t = findLitTime(route.body, route.subject, this.clock.t);
+      this.updateBodyStates();
+    }
     this.flyby.start(route);
     this.flyby.startPosition(this.clock.t, flybyPos, flybyVel);
     this.ship.setState(flybyPos, flybyVel);

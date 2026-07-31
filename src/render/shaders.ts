@@ -151,6 +151,8 @@ export const SUN_FRAG = /* glsl */ `
   uniform vec3 uCameraPosW;
   uniform float uTime;
   uniform float uIrradiance;
+  uniform sampler2D uMap;
+  uniform bool uHasMap;
 
   varying vec3 vNormalW;
   varying vec3 vPosW;
@@ -186,9 +188,17 @@ export const SUN_FRAG = /* glsl */ `
     float intensity = 1.0 - u1 * d - u2 * d * d;
     intensity = max(intensity, 0.0);
 
-    // Granulation, slowly boiling.
-    float gran = noise(n * 90.0 + vec3(0.0, 0.0, uTime * 0.02));
-    intensity *= 0.94 + 0.12 * gran;
+    // Surface detail. The photosphere image is mip-mapped, so it stays put as
+    // the ship closes; the procedural fallback is deliberately coarse, because
+    // fine 3D noise aliases into big drifting blotches when the disc is small
+    // and then resolves as you approach - which reads as the surface shrinking.
+    float detail;
+    if (uHasMap) {
+      detail = dot(texture2D(uMap, vUv).rgb, vec3(0.333)) * 1.15;
+    } else {
+      detail = 0.94 + 0.12 * noise(n * 22.0 + vec3(0.0, 0.0, uTime * 0.02));
+    }
+    intensity *= clamp(detail, 0.5, 1.35);
 
     // The limb is cooler, so it reddens as it dims.
     vec3 core = vec3(1.0, 0.97, 0.92);
@@ -308,7 +318,7 @@ export const RING_FRAG = /* glsl */ `
       float perp = length(rel - toSun * along);
       shadow = smoothstep(uPlanetRadius * 0.96, uPlanetRadius * 1.06, perp);
     }
-    shadow = mix(0.06, 1.0, shadow);
+    shadow = mix(0.14, 1.0, shadow);
 
     gl_FragColor = vec4(tint * uIrradiance * shadow, density);
     #include <tonemapping_fragment>

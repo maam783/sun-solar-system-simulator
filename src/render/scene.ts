@@ -369,7 +369,6 @@ export class SolarSystemRenderer {
     };
 
     for (const view of this.views.values()) {
-      if (view.def.id === 'sun') continue;
       load(`${view.def.id}.jpg`, (texture) => {
         view.material.uniforms.uMap!.value = texture;
         view.material.uniforms.uHasMap!.value = true;
