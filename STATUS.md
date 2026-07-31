@@ -517,3 +517,42 @@ channel. The shell also follows the planet's LOD now instead of sitting at 48
 segments while the planet went to 256 — though honesty demands the note that
 the segment count alone did not measurably move the visible edge in testing
 (0.69 px of ripple against 0.68 px), so the fade is what did the work.
+
+### Fourteenth round — the mouse is a head, not a hand
+
+Reported: the "your cursor is hidden, press Esc" banner is bad and its purpose
+is unclear; looking around should always be possible with the mouse, and the
+ship should be steered some other way, with keys that are far less coarse than
+they are.
+
+The banner is not ours — it is the browser's own pointer-lock notification, and
+it cannot be styled or suppressed. The only way to be rid of it is not to take
+pointer lock, so we do not. The cursor is now simply *where you are looking*:
+centre of the window is straight ahead, the edge is 66 degrees over, mapped
+absolutely so it can never drift or spin, with nothing to engage or release.
+It only tracks over the canvas, so reaching for the panel does not swing the
+view on the way.
+
+The head is now separate from the hull. `World.head` carries pitch and yaw
+relative to the ship, and the camera is the hull's orientation with the head
+turned on top of it. Measured: 65.9 degrees of camera swing at the window edge
+against **0.000 degrees of course change** — which is what a window is for, and
+what actually happens when you turn your head in a moving vehicle. A click
+points the ship where you are looking; that is the only thing that couples the
+two.
+
+Coarseness, both fixed by measurement rather than feel:
+
+- Steering was 0.9 rad/s, 51 deg/s — a rate for dodging, not for framing a
+  planet. Now 0.2 rad/s, and 0.04 with shift held.
+- The throttle e-folded every 0.42 s, so a tap went from a walking pace to a
+  thousand kilometres a second with nothing in between. Now 0.75 per second:
+  holding W from a standstill takes **17.5 s** to reach 1,000 km/s instead of
+  about 5, and the whole range to the 0.1 c cap is about twenty seconds. Shift
+  scales the input to a fifth.
+
+Installable as a desktop app: a web manifest with `display: fullscreen`, icons
+drawn for it, and the Apple meta tags. Chrome and Edge offer *Install*, Safari
+17 and later *Add to Dock*. That is the real answer to "I am always looking at
+the universe through a browser window" — better than the F key, because there
+is no browser around it at any point.

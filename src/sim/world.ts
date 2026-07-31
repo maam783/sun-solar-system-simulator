@@ -99,6 +99,15 @@ export class World {
   killRelVel = false;
   paused = false;
 
+  /**
+   * Where the pilot is looking, relative to the hull. Radians of pitch and yaw.
+   *
+   * The head is not the ship. Turning to look out of the side of the window
+   * does not put the ship on a new course, which is both what a window is for
+   * and what actually happens when you turn your head in a moving vehicle.
+   */
+  head = { pitch: 0, yaw: 0 };
+
   active: ActiveBody[] = [];
   readonly bodyStates = new Map<string, BodyRenderState>();
 

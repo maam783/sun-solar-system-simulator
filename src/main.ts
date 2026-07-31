@@ -228,6 +228,14 @@ const frame = (now: number): void => {
     // Point the nose directly, then set the speed we are asking for. Nothing
     // integrates here, which is exactly why it feels like flying rather than
     // like nudging a projectile.
+    // The mouse turns the head; only the arrow keys and a click turn the ship.
+    world.head.pitch = input.headPitch;
+    world.head.yaw = input.headYaw;
+    if (input.takeAim()) {
+      world.ship.aim(input.headPitch, input.headYaw, 0);
+      input.headPitch = 0;
+      input.headYaw = 0;
+    }
     const look = input.consumeLook();
     world.ship.aim(look.pitch, look.yaw, command.roll * 1.6 * dtReal);
     const ceiling = PilotDrive.ceiling(

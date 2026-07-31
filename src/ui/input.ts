@@ -35,9 +35,9 @@ export interface InputActions {
   releaseMouse: () => void;
 }
 
-const MOUSE_SENSITIVITY = 0.0022;
 /** Radians of nose movement per pixel of mouse travel, in PILOT mode. */
-const DIRECT_SENSITIVITY = 0.0026;
+const HEAD_YAW = 1.15;
+const HEAD_PITCH = 0.72;
 /** How fast the stick recentres when the mouse stops, per second. */
 const STICK_DECAY = 9;
 
@@ -55,7 +55,6 @@ export class InputController {
   private readonly keys = new Set<string>();
   private stickPitch = 0;
   private stickYaw = 0;
-  private dragging = false;
   /**
    * Raw look input, in radians, waiting to be applied.
    *
@@ -66,6 +65,11 @@ export class InputController {
    */
   private lookPitch = 0;
   private lookYaw = 0;
+  /** Where the head is pointed, relative to the hull. Radians. */
+  headPitch = 0;
+  headYaw = 0;
+  /** Set by a click: turn the ship to face where the head is. */
+  aimRequested = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -132,39 +136,30 @@ export class InputController {
   }
 
   private installMouse(): void {
+    // No pointer lock. It hides the cursor, it puts a browser-drawn banner over
+    // the view telling you to press Escape, and it makes looking around
+    // something you have to enter and leave. The cursor is simply where you are
+    // looking: centre of the window is straight ahead, edge of the window is
+    // hard over. Absolute rather than relative, so it can never drift or spin,
+    // and there is nothing to engage or release.
+    const track = (event: MouseEvent): void => {
+      const rect = this.canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+      this.headYaw = -Math.max(-1, Math.min(1, nx)) * HEAD_YAW;
+      this.headPitch = -Math.max(-1, Math.min(1, ny)) * HEAD_PITCH;
+    };
+
+    // Only over the window itself. Reaching for the panel would otherwise swing
+    // the view seventy degrees on the way there.
+    this.canvas.addEventListener('mousemove', track);
+
+    // Click to put the ship's nose where you are looking. This is the only
+    // thing that couples the head to the hull, and it is deliberate: the mouse
+    // turns your head, the ship holds its course, and a click says "that way".
     this.canvas.addEventListener('click', () => {
-      if (this.pointerLocked || this.usingDragFallback) return;
-      const request = this.canvas.requestPointerLock?.();
-      // Chromium returns a promise; a rejection means the frame forbids it.
-      if (request && typeof (request as Promise<void>).catch === 'function') {
-        (request as unknown as Promise<void>).catch(() => {
-          this.usingDragFallback = true;
-        });
-      }
-    });
-
-    document.addEventListener('pointerlockchange', () => {
-      this.pointerLocked = document.pointerLockElement === this.canvas;
-      if (this.pointerLocked) this.usingDragFallback = false;
-    });
-    document.addEventListener('pointerlockerror', () => {
-      this.usingDragFallback = true;
-    });
-
-    this.canvas.addEventListener('mousedown', () => { this.dragging = true; });
-    window.addEventListener('mouseup', () => { this.dragging = false; });
-
-    window.addEventListener('mousemove', (event) => {
-      const active = this.pointerLocked || this.dragging;
-      if (!active) return;
-      // Screen up should pitch the nose up, hence the sign on movementY.
-      this.stickYaw -= event.movementX * MOUSE_SENSITIVITY;
-      this.stickPitch -= event.movementY * MOUSE_SENSITIVITY;
-      this.stickPitch = Math.max(-1, Math.min(1, this.stickPitch));
-      this.stickYaw = Math.max(-1, Math.min(1, this.stickYaw));
-
-      this.lookYaw -= event.movementX * DIRECT_SENSITIVITY;
-      this.lookPitch -= event.movementY * DIRECT_SENSITIVITY;
+      this.aimRequested = true;
     });
 
     this.canvas.addEventListener('wheel', (event) => {
@@ -211,19 +206,30 @@ export class InputController {
    */
   consumeLook(): { pitch: number; yaw: number } {
     const held = (code: string) => (this.keys.has(code) ? 1 : 0);
-    // Arrow keys steer at a fixed rate for anyone not using a mouse.
-    const keyPitch = (held('ArrowUp') - held('ArrowDown')) * 0.9 * this.lastDt;
-    const keyYaw = (held('ArrowLeft') - held('ArrowRight')) * 0.9 * this.lastDt;
+    // The arrows are the steering. They used to turn at 51 deg/s, which is a
+    // rate for dodging, not for lining up a planet; this is a fifth of that,
+    // and holding shift is a fifth again for the last bit of framing.
+    const rate = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 0.04 : 0.2);
+    const keyPitch = (held('ArrowUp') - held('ArrowDown')) * rate * this.lastDt;
+    const keyYaw = (held('ArrowLeft') - held('ArrowRight')) * rate * this.lastDt;
     const out = { pitch: this.lookPitch + keyPitch, yaw: this.lookYaw + keyYaw };
     this.lookPitch = 0;
     this.lookYaw = 0;
     return out;
   }
 
-  /** Throttle axis for PILOT mode: +1 faster, -1 slower. */
+  /** Throttle axis for PILOT mode: +1 faster, -1 slower; smaller with shift. */
   throttleAxis(): number {
     const held = (code: string) => (this.keys.has(code) ? 1 : 0);
-    return held('KeyW') - held('KeyS');
+    const fine = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 0.22 : 1;
+    return (held('KeyW') - held('KeyS')) * fine;
+  }
+
+  /** Consume a click-to-aim request. */
+  takeAim(): boolean {
+    const wanted = this.aimRequested;
+    this.aimRequested = false;
+    return wanted;
   }
 
   isHeld(code: string): boolean {

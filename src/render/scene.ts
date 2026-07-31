@@ -42,6 +42,8 @@ const sunRel = vec();
 const dirA = vec();
 const dirB = vec();
 const quatScratch = [0, 0, 0, 1];
+const headEuler = new THREE.Euler();
+const headQuat = new THREE.Quaternion();
 
 interface BodyView {
   def: BodyPhysical;
@@ -442,8 +444,14 @@ export class SolarSystemRenderer {
     const fovRad = (this.camera.fov * Math.PI) / 180;
 
     // Orientation only: the camera's position is the origin, by construction.
+    // The camera is the hull's orientation with the pilot's head turned on top
+    // of it, applied in the hull's own frame — so looking out of the side of
+    // the window never changes where the ship is going.
     const q = world.ship.attitude;
     this.camera.quaternion.set(q[0], q[1], q[2], q[3]);
+    headEuler.set(world.head.pitch, world.head.yaw, 0, 'YXZ');
+    headQuat.setFromEuler(headEuler);
+    this.camera.quaternion.multiply(headQuat);
 
     this.updateExposure(world);
 

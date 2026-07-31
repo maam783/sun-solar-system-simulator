@@ -29,8 +29,14 @@ const RESPONSE_TAU = 1.2;
 /**
  * Speed changes exponentially so one throttle key spans metres per second to
  * light speed without feeling coarse at either end.
+ *
+ * It was 2.4, which e-folds every 0.42 s: a tap took you from a walking pace to
+ * a thousand kilometres a second, and there was no way to ask for anything in
+ * between. At 0.75 the whole range from 2 m/s to the 0.1 c cap takes about
+ * twenty seconds of holding the key, which is a throttle rather than a switch.
+ * Shift scales the input for the last bit of trimming.
  */
-const RAMP_PER_SECOND = 2.4;
+const RAMP_PER_SECOND = 0.75;
 
 /** Slowest non-zero cruise setting, m/s. Below this the throttle snaps shut. */
 const MIN_CRUISE = 2;
