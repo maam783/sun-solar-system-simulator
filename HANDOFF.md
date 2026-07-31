@@ -90,6 +90,14 @@ Next step the user asked for: research what actually triggers the sense of
 overwhelming scale in humans, and rebuild the routes around that rather than
 around guesses.
 
+## The one deliberate fiction in the scene
+
+`FlybyRoute.scaleReference` puts a to-scale Earth in frame beside the subject
+during a flypast, at the same camera range so the angular ratio is exact. It is
+rendered through the normal planet shader, so it is lit and oriented like a real
+body. Nothing else in the simulation is fabricated, and the sights panel says so
+whenever it is visible. Do not quietly extend this to other objects.
+
 ## Architecture, briefly
 
 - `src/sim/` — physics, all f64 SI, heliocentric ecliptic J2000. `world.ts` is

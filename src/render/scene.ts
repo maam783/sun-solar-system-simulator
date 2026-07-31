@@ -36,12 +36,14 @@ import {
 } from './shaders';
 import { vec, sub, len, normalize, dot, type Vec3 } from '../math/vec3d';
 import { toQuaternion } from '../math/mat3d';
+import { quatRotate } from '../math/quat';
 
 const relPos = vec();
 const sunRel = vec();
 const dirA = vec();
 const dirB = vec();
 const quatScratch = [0, 0, 0, 1];
+const CAMERA_RIGHT: Vec3 = { x: 1, y: 0, z: 0 };
 
 interface BodyView {
   def: BodyPhysical;
@@ -91,6 +93,8 @@ export class SolarSystemRenderer {
   private readonly views = new Map<string, BodyView>();
   private readonly geometries = new Map<number, THREE.SphereGeometry>();
   private sunGlare!: THREE.Sprite;
+  private scaleRef!: THREE.Mesh;
+  private scaleRefMaterial!: THREE.ShaderMaterial;
   private stars!: THREE.Points;
   private glowTexture!: THREE.Texture;
 
@@ -141,6 +145,7 @@ export class SolarSystemRenderer {
     this.buildStars();
     this.buildBodies();
     this.buildSunGlare();
+    this.buildScaleReference();
     this.installContextHandlers();
     this.resize();
   }
@@ -285,6 +290,39 @@ export class SolarSystemRenderer {
   }
 
   /**
+   * A second, to-scale Earth, placed beside whatever a flypast is looking at.
+   *
+   * It sits at the *same range from the camera* as the subject's centre, so
+   * the two angular sizes are in their true ratio and the comparison is honest
+   * even though the object is not.
+   */
+  private buildScaleReference(): void {
+    const earth = getBody('earth');
+    this.scaleRefMaterial = new THREE.ShaderMaterial({
+      vertexShader: PLANET_VERT,
+      fragmentShader: PLANET_FRAG,
+      uniforms: {
+        uSunPos: { value: new THREE.Vector3() },
+        uCameraPosW: { value: new THREE.Vector3() },
+        uBaseColor: { value: new THREE.Color(earth.color) },
+        uIrradiance: { value: 1 },
+        uMap: { value: null },
+        uHasMap: { value: false },
+        uNightMap: { value: null },
+        uHasNight: { value: false },
+        uIsGasGiant: { value: false },
+        uSeed: { value: 12 },
+        uRoughnessDetail: { value: 1 },
+        uTime: { value: 0 },
+      },
+    });
+    this.scaleRef = new THREE.Mesh(this.sphere(64), this.scaleRefMaterial);
+    this.scaleRef.frustumCulled = false;
+    this.scaleRef.visible = false;
+    this.scene.add(this.scaleRef);
+  }
+
+  /**
    * Real stars from the HYG catalogue, placed on a shell far outside the
    * planetary system. They are fixed: at solar-system scale even Alpha
    * Centauri shows no measurable parallax from a ship at Pluto.
@@ -375,6 +413,11 @@ export class SolarSystemRenderer {
       });
     }
 
+    load('earth.jpg', (texture) => {
+      this.scaleRefMaterial.uniforms.uMap!.value = texture;
+      this.scaleRefMaterial.uniforms.uHasMap!.value = true;
+    });
+
     load('earth_night.jpg', (texture) => {
       const earth = this.views.get('earth');
       if (!earth) return;
@@ -455,6 +498,7 @@ export class SolarSystemRenderer {
     }
 
     this.updateSunGlare(world, shipPos, sunRel, sunDistance, fovRad, height);
+    this.updateScaleReference(world, shipPos, sunVector);
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -661,6 +705,59 @@ export class SolarSystemRenderer {
     const resolved = Math.max(0, Math.min(1, (angularDeg - 4) / 20));
     (this.sunGlare.material as THREE.SpriteMaterial).opacity =
       0.85 * visible * (1 - resolved);
+  }
+
+  /** Park the reference body just clear of the subject's limb, at its range. */
+  private updateScaleReference(world: World, shipPos: Vec3, sunVector: THREE.Vector3): void {
+    const route = world.flyby.active ? world.flyby.route : null;
+    const refId = route?.scaleReference;
+    if (!route || !refId) {
+      this.scaleRef.visible = false;
+      return;
+    }
+
+    const subjectId = route.subject ?? route.body;
+    const subject = getBody(subjectId);
+    const reference = getBody(refId);
+    const state = world.bodyState(subjectId);
+    sub(relPos, state.pos, shipPos);
+    const range = len(relPos);
+    if (range <= subject.radius) {
+      this.scaleRef.visible = false;
+      return;
+    }
+    normalize(dirA, relPos);
+
+    // Sit it just outside the limb: far enough not to overlap, close enough
+    // that it is in shot whenever the limb is.
+    const subjectAngle = Math.asin(Math.min(1, subject.radius / range));
+    const refAngle = Math.asin(Math.min(1, reference.radius / range));
+    const lateral = Math.min(1.3, subjectAngle + refAngle * 1.8 + 0.025);
+
+    // Offset across the camera's own right axis, so it lands beside the
+    // subject in the frame rather than somewhere behind it.
+    quatRotate(dirB, world.ship.attitude, CAMERA_RIGHT);
+    const spread = Math.tan(lateral);
+    dirB.x = dirA.x + dirB.x * spread;
+    dirB.y = dirA.y + dirB.y * spread;
+    dirB.z = dirA.z + dirB.z * spread;
+    normalize(dirB, dirB);
+
+    this.scaleRef.visible = true;
+    this.scaleRef.position.set(dirB.x * range, dirB.y * range, dirB.z * range);
+    this.scaleRef.scale.setScalar(reference.radius);
+
+    // Orient and light it exactly as the real body would be, so it reads as an
+    // object in the scene rather than a sprite pasted on.
+    const refState = world.bodyState(refId);
+    toQuaternion(refState.orientation, quatScratch);
+    this.scaleRef.quaternion.set(
+      quatScratch[0]!, quatScratch[1]!, quatScratch[2]!, quatScratch[3]!);
+
+    const u = this.scaleRefMaterial.uniforms;
+    u.uSunPos!.value.copy(sunVector);
+    u.uCameraPosW!.value.set(0, 0, 0);
+    u.uIrradiance!.value = Math.min(6, solarIrradiance(len(state.pos)) / 1361);
   }
 
   // -------------------------------------------------------------------------

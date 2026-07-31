@@ -249,11 +249,17 @@ flypasts on rails.
   Jupiter, 65% at Saturn, and **1494%** at Pluto, where the exposure opens 433×
   against a sunlight of 1/1500. Scaling the floor by `uIrradiance` puts every
   body at a constant 1.5%, so a terminator is a terminator again.
-- **The size comparison is drawn now**, not just written: two discs at their
-  true ratio, Earth as the yardstick (the Moon when Earth is the subject). The
-  reference is held at a readable size and the subject scaled from it, with the
-  box clipping the overflow — for the Sun that means a 764 px arc beside a 7 px
-  Earth, which is the shape the number 109 actually has.
+- **The size comparison was first drawn as a panel diagram, which missed the
+  point.** What cinematographers mean by a reference object is something *in
+  the frame*, sitting in the world and lit like everything else — not a chart
+  beside it. A to-scale Earth is now placed in the scene next to whatever a
+  flypast is looking at, at the *same range from the camera* as the subject's
+  centre, so the two angular sizes are in their exact true ratio. Measured:
+  Jupiter 23.3° against Earth 2.11° (ratio 11.0, true 11.0); the Sun 16.9°
+  against 0.15° (ratio 109.6, true 109.2). It is in shot for about two thirds
+  of each route, dropping out at closest approach when the subject overflows
+  the frame. It is the only object in the simulation that is not really there,
+  and the console says so while it is on screen.
 
 ## Known approximations
 

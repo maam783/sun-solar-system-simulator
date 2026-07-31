@@ -52,12 +52,24 @@ export interface FlybyRoute {
    * matter to the shot, and the geometry is real on whatever date it lands.
    */
   needsLitSubject?: boolean;
+  /**
+   * Body to place in shot, to scale, as a size reference.
+   *
+   * The reason Saturn always read as huge and the Sun never did is that Saturn
+   * has the rings in frame and the Sun has nothing: an unmarked sphere carries
+   * no cue to read size from. This puts something of known size *in the world*
+   * beside the subject rather than in a panel — the ratio has to be seen, not
+   * stated. It is the one thing in the scene that is not really there, and the
+   * console says so while it is on screen.
+   */
+  scaleReference?: string;
   stops: FlybyStop[];
 }
 
 export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   {
     id: 'saturn-rings',
+    scaleReference: 'earth',
     name: 'Saturn — through the rings',
     blurb: 'Approach from below, cross the ring plane at two radii, climb away.',
     body: 'saturn',
@@ -72,6 +84,7 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'jupiter-skim',
+    scaleReference: 'earth',
     name: 'Jupiter — slingshot',
     blurb: 'In over the night side, round the limb at 1.5 radii, out into the light.',
     body: 'jupiter',
@@ -130,6 +143,7 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'sun-pass',
+    scaleReference: 'earth',
     name: 'Solar slingshot',
     blurb: 'Round the Sun at half a radius above the surface. It is the sky.',
     body: 'sun',
@@ -148,6 +162,7 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   },
   {
     id: 'mars-lowpass',
+    scaleReference: 'earth',
     name: 'Mars — slingshot',
     blurb: 'Round the back of the planet and away with the day side astern.',
     body: 'mars',

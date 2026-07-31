@@ -263,19 +263,12 @@ export class Hud {
     panel.appendChild(scale);
     this.fields.set('flybyScale', scale);
 
-    // The comparison drawn rather than stated. A number is a fact; two discs
-    // at their real ratio is the thing the number is about, and it is the cue
-    // cinematographers reach for first.
-    const compare = el('div', 'compare');
-    const bigDisc = el('div', 'disc big');
-    const refDisc = el('div', 'disc ref');
-    const refLabel = el('div', 'disclabel');
-    compare.append(bigDisc, refDisc, refLabel);
-    panel.appendChild(compare);
-    this.fields.set('cmpBox', compare);
-    this.fields.set('cmpBig', bigDisc);
-    this.fields.set('cmpRef', refDisc);
-    this.fields.set('cmpLabel', refLabel);
+    // The comparison itself lives in the scene, not here — a diagram in a
+    // panel is a fact about the size, not an experience of it. This line only
+    // owns up to the object being there.
+    const refNote = el('div', 'refnote', '');
+    panel.appendChild(refNote);
+    this.fields.set('flybyRefNote', refNote);
 
     const bar = el('div', 'bar');
     const fill = el('div', 'fill warn');
@@ -556,28 +549,20 @@ export class Hud {
         + (subjectId === 'earth' ? '' : ` · ${earths.toFixed(earths < 10 ? 1 : 0)} × Earth`);
       scaleNote.style.display = '';
 
-      // Earth is the yardstick, except when Earth is the subject.
-      const refId = subjectId === 'earth' ? 'moon' : 'earth';
-      const ref = getBody(refId);
-      const ratio = subject.radius / ref.radius;
-      // Fix the reference at a readable size, scale the subject from it, and
-      // let the box clip whatever overflows — for the Sun that is most of it,
-      // which is the point.
-      const bigPx = Math.max(44, 7 * ratio);
-      const refPx = bigPx / ratio;
-      const big = this.field('cmpBig');
-      const refEl = this.field('cmpRef');
-      big.style.width = `${bigPx}px`;
-      big.style.height = `${bigPx}px`;
-      big.style.background = `#${subject.color.toString(16).padStart(6, '0')}`;
-      refEl.style.width = `${Math.max(1, refPx)}px`;
-      refEl.style.height = `${Math.max(1, refPx)}px`;
-      refEl.style.background = `#${ref.color.toString(16).padStart(6, '0')}`;
-      this.field('cmpLabel').textContent = ref.name.toUpperCase();
-      this.field('cmpBox').style.display = '';
+      const refId = flyby.route.scaleReference;
+      const refNote = this.field('flybyRefNote');
+      if (refId) {
+        refNote.textContent =
+          `${getBody(refId).name} is in shot beside it, to scale and at the same `
+          + 'range — placed there for comparison, and the only thing here that is '
+          + 'not really there.';
+        refNote.style.display = '';
+      } else {
+        refNote.style.display = 'none';
+      }
     } else {
       scaleNote.style.display = 'none';
-      this.field('cmpBox').style.display = 'none';
+      this.field('flybyRefNote').style.display = 'none';
     }
     this.buttons.get('flybyCancel')!.style.display = flyby.active ? '' : 'none';
     for (const route of FLYBY_ROUTES) {
