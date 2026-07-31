@@ -74,7 +74,12 @@ const hud = new Hud({
   onToggleAssist: () => { world.ship.flightAssist = !world.ship.flightAssist; },
   onStartFlyby: (routeId) => {
     const route = FLYBY_BY_ID.get(routeId);
-    if (route) world.startFlyby(route);
+    if (!route) return;
+    // Face front for the opening frame; the shot is composed for that.
+    input.recentreHead();
+    world.head.pitch = 0;
+    world.head.yaw = 0;
+    world.startFlyby(route);
   },
   onCancelFlyby: () => world.flyby.stop(),
   onSetFlightModel: (model) => {
@@ -188,6 +193,14 @@ const input = new InputController(canvas, {
 // Browsers will not make a sound until the user has touched something.
 for (const event of ['pointerdown', 'keydown'] as const) {
   window.addEventListener(event, () => { void ambience.start(); }, { once: true });
+}
+
+// Registering one is what makes a browser offer to install the page at all,
+// and it is what lets the installed app open without a network.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
 }
 
 renderer.loadTextures();

@@ -16,12 +16,16 @@ across and the ship is 50 m long. That ratio *is* the simulation.
 npm install && npm run dev
 ```
 
-Then open <http://localhost:5173>. Move the mouse to look around, click to point
+Then open <http://localhost:5173>. **Drag** to look around, **click** to point
 the ship where you are looking, **W** and **S** for speed, **F** for fullscreen.
 
-It installs as a desktop app — Chrome and Edge offer *Install*, Safari 17 and
-later has *Add to Dock* in the share menu — which opens it in its own window
-with no browser around it at all.
+It installs as a desktop app, which opens it in its own window with no browser
+around it at all:
+
+- **Chrome / Edge** — the install icon (a monitor with an arrow) at the right of
+  the address bar, or ⋮ → *Cast, save and share* → *Install page as app*.
+- **Safari 17+** — the share button in the toolbar → *Add to Dock*.
+- **iPhone / iPad** — share → *Add to Home Screen*.
 
 You start in a 400 km orbit over the daylight side of Earth, on today's actual
 date, with the planets where they actually are.
@@ -188,7 +192,7 @@ comma-separated list.
 
 | | |
 |---|---|
-| Mouse | Look around — the head, not the hull |
+| Drag | Look around — the head, not the hull |
 | Click | Turn the ship to face where you are looking |
 | **W / S** | **Faster / slower** |
 | **Space** | **All stop** |

@@ -556,3 +556,28 @@ drawn for it, and the Apple meta tags. Chrome and Edge offer *Install*, Safari
 17 and later *Add to Dock*. That is the real answer to "I am always looking at
 the universe through a browser window" — better than the F key, because there
 is no browser around it at any point.
+
+### Fifteenth round — looking around had to be something you ask for
+
+Reported: with the view following the cursor the application cannot be
+operated, because the view changes the whole time; and the install option
+could not be found.
+
+The first is mine and it was an over-correction. Removing pointer lock was
+right — the banner it puts over the view is the browser's own and cannot be
+suppressed — but mapping the cursor's *position* to the look direction means
+every reach for a button turns the sky on the way, and there is no way to hold
+still. Looking around now needs the button held, which is the whole difference:
+it is always available, never accidental, and the cursor stays where it is put.
+
+Measured: mouse movement with no button held moves the view **0.0 degrees**; a
+400 px drag turns it 73 degrees; after release the view holds exactly where it
+was; a press that never moved more than 5 px is taken as a click and points the
+ship instead. Limits at 155 degrees of yaw and 77 of pitch.
+
+The install option was missing because a browser will not offer to install a
+page without a registered service worker carrying a fetch handler — the
+manifest alone is not enough. There is one now, network-first with the cache as
+a fallback, so the installed app also opens without a network. `display` is
+`standalone`, which is the value desktop browsers actually act on, with
+`fullscreen` offered ahead of it through `display_override`.
