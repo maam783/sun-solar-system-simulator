@@ -371,3 +371,32 @@ HUD: the flight panel is hidden in the simple view (it is an instrument panel,
 and the simple view is not flying by instruments), the route blurb no longer
 sits in the middle of the view for the length of a shot, and the note owning up
 to the reference is one short line.
+
+### Tenth round — the reference Earth glowed
+
+Reported, with a screenshot: Earth beside Jupiter is lit as though from within,
+and much brighter than the planet next to it.
+
+Earth's city lights were added *outside* `uIrradiance` — the same defect fixed
+one round earlier for the ambient floor, three lines below it in the same
+shader, and missed here. The lights were tuned as an absolute value at Earth's
+own sunlight. At Jupiter the sunlight is a twenty-eighth of that, so the day
+side dimmed by 28x while the lights stayed put and the adaptive exposure then
+opened up against the dim scene and multiplied them. The night side filled
+right in, which is why the disc read as fully lit *and* brighter than Jupiter:
+what should have been the dark half was the part that was glowing.
+
+Measured by rendering the flypast at 600x600 and reading the framebuffer back,
+using a difference image so only the pixels the reference actually paints are
+counted. (The first attempt measured a star sitting at the same screen position
+— the blob was still there with the reference switched off.)
+
+| | reference | Jupiter |
+|---|---|---|
+| phase | 143 deg | 139 deg |
+| mean luminance | 25 | 60 |
+| peak | 213 | 255 |
+
+A crescent, dimmer than the planet, as it should be. The lights now contribute
+2.6 of mean luminance instead of roughly 73, and no longer clip. At 1 AU the
+scale factor is exactly 1, so nothing changes for the real Earth in Earth orbit.

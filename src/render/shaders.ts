@@ -126,19 +126,27 @@ export const PLANET_FRAG = /* glsl */ `
 
     vec3 color = albedo * lit * uIrradiance;
 
+    // City lights, and a faint floor so the night side is a silhouette rather
+    // than a hole. Both are scaled by the local sunlight like everything else.
+    //
+    // Adding either *outside* uIrradiance makes it an absolute value that the
+    // adaptive exposure then multiplies. At Jupiter that put the night side at
+    // a third of the day side, so the planet looked lit from every direction at
+    // once; at Pluto, where the exposure opens 480x against a sunlight of
+    // 1/1500, the night side came out brighter than the day side.
+    //
+    // The lights are emitted, not reflected, so leaving them unscaled looks
+    // like the honest choice — but the 1.4 is a legibility figure chosen at
+    // Earth's own irradiance, where real city lights are some five orders of
+    // magnitude below daylight. Carrying that fudge to a twenty-eighth of the
+    // sunlight turned a body 5 AU out into a lamp: the whole night side filled
+    // in, so it read as fully lit and brighter than the planet beside it.
+    // Scaling keeps the ratio it was tuned to.
     if (uHasNight && lambert < 0.12) {
       float nightAmount = smoothstep(0.12, -0.05, lambert);
-      color += texture2D(uNightMap, vUv).rgb * nightAmount * 1.4;
+      color += texture2D(uNightMap, vUv).rgb * nightAmount * 1.4 * uIrradiance;
     }
 
-    // A faint floor so the night side is a silhouette rather than a hole —
-    // scaled by the local sunlight like everything else.
-    //
-    // Adding it *outside* uIrradiance, as it was, made it an absolute value
-    // that the adaptive exposure then multiplied. At Jupiter that put the night
-    // side at a third of the day side, so the planet looked lit from every
-    // direction at once; at Pluto, where the exposure opens 480x against a
-    // sunlight of 1/1500, the night side came out brighter than the day side.
     color += albedo * 0.015 * uIrradiance;
 
     gl_FragColor = vec4(color, 1.0);

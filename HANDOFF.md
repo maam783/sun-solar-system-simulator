@@ -131,6 +131,20 @@ whenever it is visible. Do not quietly extend this to other objects.
 - `src/ui/hud.ts` — simple view by default; `setSimple(false)` unfolds the full
   console.
 
+## Reading brightness out of the renderer
+
+Screenshots are unreliable here (hidden pane, stale composited frames), but the
+framebuffer is not. Set `renderer.setPixelRatio(1)`, `setSize(N, N, false)`,
+stub out `renderer.resize`, drive with `SIM.frame`, and `gl.readPixels`
+synchronously after the render. Always measure a body by *difference* — render
+once with it hidden and once with it shown — or you will end up measuring a
+star that happens to sit at the same screen position.
+
+Anything added to a fragment colour must be scaled by `uIrradiance`. This has
+now been the cause of two separate bugs (the ambient floor, then Earth's city
+lights): an absolute term survives the 1/1500 sunlight at Pluto unchanged and
+is then multiplied by an adaptive exposure opening 480x to compensate.
+
 ## Things that are settled and should not be re-litigated
 
 - Planet positions are validated against 48 JPL Horizons vectors; do not "fix"
