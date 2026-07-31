@@ -23,7 +23,33 @@ visibility, pixel readback from the canvas — is meaningless in that state.
 Measure geometry (angles, distances, lit fractions) instead, or make the pane
 visible.
 
-## The open problem: the flypasts do not feel big
+## Resolved: the flypasts now feel big
+
+Fixed by budgeting time by **swept angle** rather than by distance, plus a
+scale caption. Measured at closest approach:
+
+| route | duration | max angular size | sweep rate | was |
+|---|---|---|---|---|
+| Sun | 112 s | 103° | 4.1°/s | 26°/s |
+| Jupiter | 102 s | 83° | 3.9°/s | ~20°/s |
+| Saturn | 88 s | 67° | 3.5°/s | ~15°/s |
+
+The research this came from is worth keeping: the emotion is **awe**, whose two
+core appraisals (Keltner & Haidt 2003) are *perceived vastness* and *need for
+accommodation*. The fear-tinged version is **megalophobia**, and which of the
+two a large object produces turns mostly on whether the viewer feels safe.
+Cinematographers get vastness from three things: a **known reference object** in
+frame, **slow movement** (a Pacific Rim punch takes one to two seconds so the
+weight reads), and wide framing. We were violating the first two.
+
+Angular *rate* turned out to matter more than angular *size*: 26°/s reads as a
+small object flicking past no matter how much of the frame it fills. The
+reparameterisation gives constant angle per second, which as a side effect also
+produces the right shape — rush in from far out, sweep slowly at closest
+approach — because the same metres per second is a crawl at nine radii and a
+blur at one.
+
+## Historical: the open problem as it was diagnosed
 
 Reported: rounding the Sun takes about three seconds, which destroys the sense
 of scale. The user is right, and the diagnosis so far is incomplete — angular

@@ -216,6 +216,30 @@ reads 1.32 c during that flypast. The routes are camera moves on rails and are
 not bound by the drive's 0.1 c ceiling — the speed shown is the real speed of
 the real path, and the panel says FLYPAST while it runs.
 
+## Sixth round: making the size *felt* rather than merely measured
+
+The Sun spanned 103° and still did not read as vast, because the shot swept it
+past at 26°/s — a rate the eye reads as a small nearby object, not a huge
+distant one. Angular size had been fixed; angular rate had not.
+
+- **Time is budgeted by swept angle, not by distance.** Equal metres per second
+  is a crawl at nine radii and a blur at one, so the table that maps time to
+  position now accumulates `step / distance` (the angle a step subtends) rather
+  than `step`. Constant angle per second falls out, and with it the shape a
+  cinematographer would choose: rush in from far out, sweep slowly at closest
+  approach. Peak rate is now 3.5–4.1°/s across the three slingshots, and routes
+  run 88–112 s rather than ~55.
+- **A scale caption during each flypast** ("SUN — 1,392,700 km across · 109 ×
+  Earth"). The most-cited cinematography technique for conveying scale is a
+  known object in frame; Saturn has the rings and is the shot that always read
+  best, and the others had nothing at all.
+
+Background, recorded because it should drive future shot design: the emotion is
+awe, whose two core appraisals are perceived vastness and need for accommodation
+(Keltner & Haidt 2003). Whether a large object produces awe or dread depends
+mostly on whether the viewer feels safe, which is an argument for keeping the
+flypasts on rails.
+
 ## Known approximations
 
 Deliberate, and documented where they live:

@@ -63,11 +63,11 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     body: 'saturn',
     stops: [
       { at: [7.5, -7.5, -2.6], seconds: 0 },
-      { at: [3.4, -3.0, -0.9], seconds: 13 },
-      { at: [2.05, -0.9, -0.10], seconds: 11 },
-      { at: [1.95, 0.9, 0.07], seconds: 7 },
-      { at: [3.4, 3.4, 1.1], seconds: 11 },
-      { at: [7.0, 6.5, 2.6], seconds: 12 },
+      { at: [3.4, -3.0, -0.9], seconds: 18 },
+      { at: [2.05, -0.9, -0.10], seconds: 20 },
+      { at: [1.95, 0.9, 0.07], seconds: 16 },
+      { at: [3.4, 3.4, 1.1], seconds: 18 },
+      { at: [7.0, 6.5, 2.6], seconds: 16 },
     ],
   },
   {
@@ -81,11 +81,11 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     // it turns to look back on its own as the ship departs.
     stops: [
       { at: [-6.5, -7.0, 1.6], seconds: 0 },
-      { at: [-2.2, -2.4, 0.45], seconds: 13 },
-      { at: [-0.5, -1.6, 0.10], seconds: 10 },
-      { at: [1.3, -1.15, 0.05], seconds: 9 },
-      { at: [3.2, 1.4, 0.35], seconds: 11 },
-      { at: [7.5, 6.0, 1.4], seconds: 13 },
+      { at: [-2.2, -2.4, 0.45], seconds: 20 },
+      { at: [-0.5, -1.6, 0.10], seconds: 22 },
+      { at: [1.3, -1.15, 0.05], seconds: 22 },
+      { at: [3.2, 1.4, 0.35], seconds: 20 },
+      { at: [7.5, 6.0, 1.4], seconds: 18 },
     ],
   },
   {
@@ -139,11 +139,11 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     // radii it spans 87 degrees and stops being an object at all.
     stops: [
       { at: [-9.0, -9.0, 2.0], seconds: 0 },
-      { at: [-2.6, -2.6, 0.55], seconds: 13 },
-      { at: [-0.45, -1.40, 0.10], seconds: 10 },
-      { at: [1.15, -0.95, 0.05], seconds: 9 },
-      { at: [3.0, 1.6, 0.4], seconds: 11 },
-      { at: [9.0, 8.0, 1.9], seconds: 13 },
+      { at: [-2.6, -2.6, 0.55], seconds: 22 },
+      { at: [-0.45, -1.40, 0.10], seconds: 24 },
+      { at: [1.15, -0.95, 0.05], seconds: 24 },
+      { at: [3.0, 1.6, 0.4], seconds: 22 },
+      { at: [9.0, 8.0, 1.9], seconds: 20 },
     ],
   },
   {
@@ -153,11 +153,11 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     body: 'mars',
     stops: [
       { at: [-4.5, -5.0, 1.1], seconds: 0 },
-      { at: [-1.8, -1.9, 0.35], seconds: 12 },
-      { at: [-0.4, -1.35, 0.08], seconds: 10 },
-      { at: [1.1, -0.95, 0.04], seconds: 9 },
-      { at: [2.8, 1.2, 0.3], seconds: 11 },
-      { at: [5.5, 4.5, 1.0], seconds: 12 },
+      { at: [-1.8, -1.9, 0.35], seconds: 18 },
+      { at: [-0.4, -1.35, 0.08], seconds: 20 },
+      { at: [1.1, -0.95, 0.04], seconds: 20 },
+      { at: [2.8, 1.2, 0.3], seconds: 18 },
+      { at: [5.5, 4.5, 1.0], seconds: 16 },
     ],
   },
 ];
@@ -307,14 +307,20 @@ export class FlybyDirector {
 
   private total = 0;
   /**
-   * Arc-length lookup: `distance[i]` is how far along the path `param[i]` is.
+   * Swept-angle lookup: `distance[i]` is how much *angle*, seen from the body,
+   * the path has covered by `param[i]`.
    *
-   * A Catmull-Rom spline does not travel at a constant rate in its own
-   * parameter — it slows through tight corners and races down straight legs.
-   * Driving it by parameter therefore surges and stalls, which is exactly what
-   * a flypast must not do. Walking this table instead means equal time buys
-   * equal distance, so the only speed changes left are the ones the shot asks
-   * for.
+   * Two things had to be got right here in turn. First, a Catmull-Rom spline
+   * does not travel at a constant rate in its own parameter — it slows through
+   * corners and races down straight legs — so driving it by parameter surges
+   * and stalls. Reparameterising by arc length fixed that.
+   *
+   * But equal *distance* per second is still the wrong thing for a flypast.
+   * What a viewer reads size from is how fast the surface slides across the
+   * field of view, not how many metres are covered: the same metres per second
+   * is a crawl at nine radii and a blur at one. Budgeting equal *angle* per
+   * second instead makes the ship rush in from far out and then sweep slowly
+   * round at closest approach, which is what the shot is for.
    */
   private param: number[] = [];
   private distance: number[] = [];
@@ -341,10 +347,17 @@ export class FlybyDirector {
     for (let k = 1; k <= SAMPLES; k++) {
       const u = (k / SAMPLES) * span;
       splineAt(route.stops, u, lengthB);
-      acc += Math.hypot(
+      const step = Math.hypot(
         lengthB[0]! - lengthA[0]!,
         lengthB[1]! - lengthA[1]!,
         lengthB[2]! - lengthA[2]!);
+      // Offsets are in body radii, so the distance from the centre is just the
+      // magnitude and `step / distance` is the angle that step subtends.
+      const midX = (lengthA[0]! + lengthB[0]!) / 2;
+      const midY = (lengthA[1]! + lengthB[1]!) / 2;
+      const midZ = (lengthA[2]! + lengthB[2]!) / 2;
+      const distance = Math.max(1, Math.hypot(midX, midY, midZ));
+      acc += step / distance;
       lengthA[0] = lengthB[0]!;
       lengthA[1] = lengthB[1]!;
       lengthA[2] = lengthB[2]!;
@@ -398,7 +411,7 @@ export class FlybyDirector {
     // so normalise to keep the route ending exactly at its last waypoint.
     eased /= 1 - edge;
 
-    // Eased progress is a fraction of the *distance*, looked up in the table.
+    // Eased progress is a fraction of the swept *angle*, looked up in the table.
     const target = Math.max(0, Math.min(1, eased)) * this.totalLength;
     const d = this.distance;
     let lo = 0;

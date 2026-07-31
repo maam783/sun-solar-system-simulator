@@ -256,6 +256,13 @@ export class Hud {
     panel.appendChild(status);
     this.fields.set('flybyStatus', status);
 
+    // A scale anchor. An unmarked sphere has nothing to read size from — which
+    // is why Saturn, the one shot with a natural reference in frame, is the one
+    // that lands. The others get the number instead.
+    const scale = el('div', 'scalenote', '');
+    panel.appendChild(scale);
+    this.fields.set('flybyScale', scale);
+
     const bar = el('div', 'bar');
     const fill = el('div', 'fill warn');
     bar.appendChild(fill);
@@ -523,6 +530,20 @@ export class Hud {
       : (flyby.message || 'Pick a flypast — the ship flies it for you.');
     (this.field('flybyFill') as HTMLElement).style.width =
       `${(flyby.active ? flyby.progress : 0) * 100}%`;
+
+    const scaleNote = this.field('flybyScale');
+    if (flyby.active && flyby.route) {
+      const subjectId = flyby.route.subject ?? flyby.route.body;
+      const subject = getBody(subjectId);
+      const earths = (subject.radius / getBody('earth').radius);
+      const across = (2 * subject.radius) / 1000;
+      scaleNote.textContent =
+        `${subject.name.toUpperCase()} — ${Math.round(across).toLocaleString('en-GB')} km across`
+        + (subjectId === 'earth' ? '' : ` · ${earths.toFixed(earths < 10 ? 1 : 0)} × Earth`);
+      scaleNote.style.display = '';
+    } else {
+      scaleNote.style.display = 'none';
+    }
     this.buttons.get('flybyCancel')!.style.display = flyby.active ? '' : 'none';
     for (const route of FLYBY_ROUTES) {
       this.buttons.get(`flyby_${route.id}`)!.classList.toggle(
