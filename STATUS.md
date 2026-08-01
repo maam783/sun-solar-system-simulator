@@ -1042,3 +1042,31 @@ frame, which is the same test only while the subject is small. A route may aim
 off it on purpose; the dawn pass tilts 55 degrees up, so the Moon's centre is
 far outside a frame that contains nothing but Moon. It now tests whether any of
 the subject is on screen: 99.8%.
+
+### Thirtieth round — the colours were the Sun
+
+Reported with a screenshot: the Charon flypast fills the frame with sheets of
+pink, green and yellow.
+
+It was the Sun, drawn as a point source. Anything too small to be a disc gets an
+impostor sprite whose size grows with brightness past a saturation magnitude, so
+that Venus reads as a hard spark with a halo rather than clipping. The rule is
+exponential in magnitude, magnitude has no floor, and it was written with Venus
+at -4 in mind. The Sun from Pluto is -19, which the same expression answers with
+a factor of 3,980.
+
+Measured: the Sun's impostor at Pluto was **37,550 pixels wide** — fifty times
+the frame — against 4 to 7 px for every other body. A single radial gradient
+stretched that far bands hard in eight bits, and additive blending turned the
+bands into the colours reported.
+
+Two false leads first, both cleared by measurement rather than by argument: the
+star field (hiding it changed the frame by nothing at all) and the solar glare
+(hiding it left 99% of the frame *more* strongly coloured, not less).
+
+The Sun no longer takes the point-source path at all — it has a mesh and a glare
+sized in degrees of sky, and both were already right — and the growth is capped
+at 64 px so nothing else can repeat it. Measured after: worst frame of the
+Charon route is 1% lit at a mean of 33 with **0% strongly coloured**, against
+100% lit at 249 with 35% coloured before, and the largest impostor anywhere is
+7 px.

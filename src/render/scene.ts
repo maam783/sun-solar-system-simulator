@@ -676,6 +676,18 @@ export class SolarSystemRenderer {
       // Too small to be a disc: draw it as a point of the brightness it really
       // has, which is the only honest way to show a planet from across the
       // solar system.
+      // The Sun never gets one. It has a mesh and it has a glare sprite sized
+      // in degrees of sky, and both handle it properly; the point-source path
+      // does not, because the growth rule below has no ceiling. From Pluto the
+      // Sun is magnitude -19 against a saturation figure of -1, which works out
+      // at a sprite **37,550 pixels wide** — fifty times the frame. A single
+      // radial gradient stretched that far bands hard in eight bits, and
+      // additive blending turned the bands into the sheets of pink and green
+      // that were reported. It was the Sun all along.
+      if (view.def.kind === 'star') {
+        view.sprite.visible = false;
+        return;
+      }
       const magnitude = apparentMagnitude(view.def, state.pos, shipPos);
       const brightness = magnitudeToBrightness(magnitude);
       if (brightness <= 0.002) {
@@ -690,8 +702,11 @@ export class SolarSystemRenderer {
       let size = 2.5 + 7 * brightness;
       if (magnitude < PHOTOMETRY.saturationMagnitude) {
         // Brighter than saturation: grow rather than clip, so Venus reads as a
-        // hard spark with a halo.
+        // hard spark with a halo. Capped, because the rule is exponential in
+        // magnitude and magnitude has no floor — it was written with Venus at
+        // -4 in mind and says 3,980x for the Sun at -19.
         size *= Math.sqrt(Math.pow(10, -0.4 * (magnitude - PHOTOMETRY.saturationMagnitude)));
+        size = Math.min(size, 64);
       }
       view.sprite.scale.set(size / viewportHeight * 2, size / viewportHeight * 2, 1);
       view.spriteMaterial.opacity = Math.min(1, brightness * 1.6);

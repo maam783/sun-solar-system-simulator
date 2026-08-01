@@ -182,6 +182,16 @@ at its own end regardless, which is a silence as long as the stall. Timing is
 taken from `ctx.currentTime` in the per-frame update instead, with the next bed
 brought up a whole fade early.
 
+## The Sun is not a point source
+
+`updateBody` skips the impostor path for anything of kind `star`. The Sun has a
+mesh and a glare sprite sized in degrees of sky, and both are correct; the
+point-source path is not, because its growth rule is exponential in magnitude
+and magnitude has no floor. It was written for Venus at -4 and returns 3,980x
+for the Sun at -19 — measured from Pluto, a sprite **37,550 pixels wide**, fifty
+times the frame, which banded in eight bits and washed the whole view in pink
+and green. The size is capped at 64 px as well, so nothing else can do it either.
+
 ## Things that are settled and should not be re-litigated
 
 - Planet positions are validated against 48 JPL Horizons vectors; do not "fix"
