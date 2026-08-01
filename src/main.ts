@@ -242,7 +242,7 @@ let wasDestroyed = false;
 const STEER_TORQUE = 0.04;
 const HELD_DAMPING = 0.28;
 const FREE_DAMPING = 0.22;
-const steerRate = { pitch: 0, yaw: 0 };
+const steerRate = { pitch: 0, yaw: 0, roll: 0 };
 
 const scenario = installScenario();
 
@@ -283,17 +283,26 @@ const frame = (now: number): void => {
     // digital as it was. The decay when nothing is held is the flight
     // assistant trimming the rate out, not friction; there is none.
     const steer = input.steerAxis();
-    const damping = (steer.pitch === 0 && steer.yaw === 0) ? FREE_DAMPING : HELD_DAMPING;
-    steerRate.pitch += (steer.pitch * STEER_TORQUE - steerRate.pitch * damping) * dtReal;
-    steerRate.yaw += (steer.yaw * STEER_TORQUE - steerRate.yaw * damping) * dtReal;
-    if (Math.abs(steerRate.pitch) < 1e-5) steerRate.pitch = 0;
-    if (Math.abs(steerRate.yaw) < 1e-5) steerRate.yaw = 0;
+    // Roll goes through the same mill. It was still adding an angle per frame,
+    // which is the very thing the other two axes were taken off — a hull does
+    // not start and stop rolling on a keystroke either. Its authority is a
+    // little higher than pitch and yaw because there is less of the ship to
+    // swing about the long axis, which is true of nearly every vehicle.
+    const rollAxis = command.roll;
+    const rate = (axis: number, current: number, torque: number): number => {
+      const damping = axis === 0 ? FREE_DAMPING : HELD_DAMPING;
+      const next = current + (axis * torque - current * damping) * dtReal;
+      return Math.abs(next) < 1e-5 ? 0 : next;
+    };
+    steerRate.pitch = rate(steer.pitch, steerRate.pitch, STEER_TORQUE);
+    steerRate.yaw = rate(steer.yaw, steerRate.yaw, STEER_TORQUE);
+    steerRate.roll = rate(rollAxis, steerRate.roll, STEER_TORQUE * 1.4);
 
     const look = input.consumeLook();
     world.ship.aim(
       look.pitch + steerRate.pitch * dtReal,
       look.yaw + steerRate.yaw * dtReal,
-      command.roll * 1.6 * dtReal);
+      steerRate.roll * dtReal);
     const ceiling = PilotDrive.ceiling(
       world.ship.mode, world.ship.overrideStage, world.nearest.altitude);
     world.pilot.throttle(input.throttleAxis(), dtReal, ceiling);
@@ -339,7 +348,8 @@ const frame = (now: number): void => {
 
   // Cold gas, on while the valve is open and off when it shuts.
   ambience.steering(input.isHeld('ArrowUp') || input.isHeld('ArrowDown')
-    || input.isHeld('ArrowLeft') || input.isHeld('ArrowRight'));
+    || input.isHeld('ArrowLeft') || input.isHeld('ArrowRight')
+    || input.isHeld('KeyQ') || input.isHeld('KeyE'));
 
   hud.update(world, renderer, fps, input.pointerLocked);
   scenario?.afterFrame();

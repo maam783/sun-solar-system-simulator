@@ -790,3 +790,23 @@ repeated taps are not the same sound twice.
 low-pass fixes the character and costs 19.5 dB, so the gain is largely makeup.
 Measured through the whole chain: **-33 dBFS played, peak 0.12, no clipping**,
 against the hull hum at -30.8 and the harsh first version at -24.3.
+
+### Twenty-second round — roll had been left behind
+
+Reported: Q and E are still digital. They were. Pitch and yaw were moved onto
+torque and roll was not — it went on adding `1.6 * dt` radians per frame, which
+is an instant **92 deg/s** for as long as the key is down and nothing at all the
+moment it is not. Eleven times the rate of the other two axes, with no build and
+no settle.
+
+It now goes through the same mill, with 1.4x the authority of pitch and yaw
+because there is less of a ship to swing about its long axis — true of nearly
+every vehicle. Measured on the recurrence: **11.5 deg/s at the top**, 2.8 after
+one second, 6.5 after three, settling back through 4.8 and 3.1 over the five
+after release.
+
+The difference a tap makes is the whole point. A 0.15 s press used to roll the
+ship 13.8 degrees; it now rolls it 0.04 and leaves it turning at half a degree
+a second, which then trims itself out.
+
+The attitude thrusters hiss for roll too now, which they did not before.
