@@ -109,7 +109,9 @@
     opacity: 1;
   }
   #hud.simple.idle #sights { opacity: 0; pointer-events: none; }
-  body.idle, body.idle #scene { cursor: none; }
+  /* The canvas sets its own cursor inline while dragging, and an inline style
+     beats a rule — hence the important. */
+  body.idle, body.idle #scene { cursor: none !important; }
 
   /* Engineering readouts stay out of the way until asked for. */
   #hud:not(.advanced) .adv { display: none !important; }

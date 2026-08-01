@@ -145,9 +145,16 @@ export class InputController {
     // Holding the button is the whole difference. It means looking around is
     // always available and never accidental, the cursor stays visible, and a
     // click that did not drag is unambiguous enough to mean something else.
-    const LIMIT_YAW = 2.7;
-    const LIMIT_PITCH = 1.35;
-    const SENSITIVITY = 0.0032;
+    // Yaw is not limited. It was, at 155 degrees each way, which is a leftover
+    // from steering the hull with the mouse — a nose has a forward, a head does
+    // not, and stopping it dead short of all the way round is exactly the
+    // artefact it felt like. Pitch keeps its stop just short of vertical, which
+    // is not a limitation but anatomy: past straight up there is no way to say
+    // which way is up any more.
+    const LIMIT_PITCH = 1.45;
+    // Halved, and then some. 400 px used to swing the view 73 degrees, which is
+    // most of the window for a flick of the wrist.
+    const SENSITIVITY = 0.0014;
 
     this.canvas.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
@@ -161,7 +168,10 @@ export class InputController {
       this.dragMoved += Math.abs(event.movementX) + Math.abs(event.movementY);
       this.headYaw -= event.movementX * SENSITIVITY;
       this.headPitch -= event.movementY * SENSITIVITY;
-      this.headYaw = Math.max(-LIMIT_YAW, Math.min(LIMIT_YAW, this.headYaw));
+      // Keep yaw in [-pi, pi] so it never grows without bound, but let it wrap
+      // rather than stop.
+      if (this.headYaw > Math.PI) this.headYaw -= 2 * Math.PI;
+      if (this.headYaw < -Math.PI) this.headYaw += 2 * Math.PI;
       this.headPitch = Math.max(-LIMIT_PITCH, Math.min(LIMIT_PITCH, this.headPitch));
     });
 

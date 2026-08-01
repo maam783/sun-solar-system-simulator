@@ -40,14 +40,23 @@ type Clip = (typeof FILES)[number];
  */
 const LEVEL: Record<Clip, number> = {
   ambient: 0.26,
-  hum: 0.10,
+  // The one sound that is always there, so it is the one that must not be
+  // noticed. It sat at -24.8 dBFS, which is audible on its own with the music
+  // off; this is 6 dB down from that.
+  hum: 0.05,
   drive: 0.40,
   // Attitude thrusters are felt through the hull, not heard as a jet. The
   // first one was a hiss at 0.30 and wrong on both counts.
   rcs: 0.11,
   warp: 0.45,
   rumble: 0.50,
-  voice1: 0.9, voice2: 0.9, voice3: 0.9, voice4: 0.9, voice5: 0.9, voice6: 0.9,
+  // Measured against the old chain rather than guessed: limiting the speech
+  // raised its RMS by 8.1 dB at the same peak, which would have made a level
+  // that was already right too loud. This takes that back out, so what changes
+  // is the character and not the volume — the crest factor falls from 20.6 dB
+  // to 12.1, which is the constant pressure a radio link has and the part that
+  // filtering alone could never supply.
+  voice1: 0.2, voice2: 0.2, voice3: 0.2, voice4: 0.2, voice5: 0.2, voice6: 0.2,
 };
 
 export class Ambience {
@@ -246,22 +255,57 @@ export class Ambience {
     if (speechBuffer) {
       const voice = this.ctx.createBufferSource();
       voice.buffer = speechBuffer;
+
+      // The chain that makes a voice sound like a radio rather than like a
+      // voice with the treble turned down. Filtering alone was not enough, as
+      // reported, and the missing part is the dynamics: a link like this is
+      // driven hard into limiting so that every syllable arrives at the same
+      // level, and the peaks are clipped rather than reproduced. That constant
+      // pressure — not the bandwidth — is what the ear recognises.
+      //
+      // Band first: 300 to 2,700 Hz is roughly what the circuit passes.
       const high = this.ctx.createBiquadFilter();
       high.type = 'highpass';
-      high.frequency.value = 320;
+      high.frequency.value = 300;
+      high.Q.value = 0.9;
       const low = this.ctx.createBiquadFilter();
       low.type = 'lowpass';
-      low.frequency.value = 2900;
-      // A little presence peak, which is what makes a small speaker sound like
-      // a small speaker rather than like a muffled one.
+      low.frequency.value = 2700;
+      low.Q.value = 0.9;
+      // Presence peak: a small speaker in a small box.
       const peak = this.ctx.createBiquadFilter();
       peak.type = 'peaking';
-      peak.frequency.value = 1700;
-      peak.Q.value = 1.1;
-      peak.gain.value = 7;
+      peak.frequency.value = 1800;
+      peak.Q.value = 1.4;
+      peak.gain.value = 9;
+      // Push it well past the threshold, then limit hard.
+      const drive = this.ctx.createGain();
+      drive.gain.value = 5;
+      const limiter = this.ctx.createDynamicsCompressor();
+      limiter.threshold.value = -26;
+      limiter.knee.value = 2;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.06;
+      // Soft clipping on top, for the edge a saturated transmitter has.
+      const shaper = this.ctx.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let i = 0; i < curve.length; i++) {
+        const x = (i / (curve.length - 1)) * 2 - 1;
+        curve[i] = Math.tanh(x * 2.4);
+      }
+      shaper.curve = curve;
+      shaper.oversample = '4x';
+      // Band-limit again after the distortion, or its harmonics reach outside
+      // the circuit and give the whole thing away.
+      const post = this.ctx.createBiquadFilter();
+      post.type = 'lowpass';
+      post.frequency.value = 2700;
+
       const level = this.ctx.createGain();
       level.gain.value = LEVEL[pick];
-      voice.connect(high).connect(low).connect(peak).connect(level).connect(bus);
+      voice.connect(high).connect(low).connect(peak).connect(drive)
+        .connect(limiter).connect(shaper).connect(post).connect(level).connect(bus);
       voice.start(t0 + 0.3);
     }
 

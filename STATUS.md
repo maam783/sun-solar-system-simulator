@@ -673,3 +673,42 @@ ones and swapped in on arrival so no first frame waits on 24 MB.
 
 Not done this round, and worth saying plainly: more routes, and music timed to
 the moment of the rise.
+
+### Eighteenth round — five optimisations, all measured
+
+**The hum was audible on its own.** It sat at -24.8 dBFS played, above the
+ambient bed. Down 6 dB to -30.8, which puts it under the music instead of
+beside it.
+
+**The radio did not sound compressed, and the voice was wrong.** Two separate
+faults. The voice is now one operator rather than a cast — a capsule
+communicator is one person on one console, and the sameness is half of what
+makes traffic sound like traffic — flat, unhurried, mature American.
+
+The compression was the missing half. Band-limiting alone was never going to be
+enough: what the ear recognises in a space link is the *dynamics*, every
+syllable arriving at the same level with the peaks clipped rather than
+reproduced. The chain is now 300-2,700 Hz, a presence peak at 1.8 kHz, 14 dB of
+drive into a 20:1 limiter at -26 dB, soft clipping through tanh, and a second
+low-pass to keep the distortion's harmonics inside the circuit. Measured
+against the old chain on the same file: crest factor **20.6 dB down to 12.1**,
+peak essentially unchanged. Limiting raised the RMS by 8.1 dB, which would have
+made a level that was already right too loud, so the gain takes exactly that
+back out — what changes is the character, not the volume.
+
+**Steering still turned too fast.** It was 0.16 of torque against 0.6 of
+damping: 15.3 deg/s reached in 1.7 s, so a tap was most of a turn. At 0.04
+against 0.28 it is **8.2 deg/s reached in 3.6 s**, settling over 4.5. A quarter
+of the authority, which is about right for thrusters against a hull.
+
+**The cursor stayed visible when everything else faded.** The canvas sets its
+own cursor inline while dragging, and an inline style beats a stylesheet rule.
+The idle rule is `!important` now. Measured: `none` when idle, `grab` when not.
+
+**Looking around was too sensitive and stopped short of all the way round.**
+Sensitivity halved: a 400 px drag turns the view **32.1 degrees**, down from
+73.3. And yaw is no longer clamped — it was stopping at 155 degrees each way,
+a leftover from when the mouse steered the hull. A nose has a forward; a head
+does not. Yaw wraps freely now (measured: 4,800 px of drag comes out at 25
+degrees rather than jammed at 155), and only pitch keeps a stop, at 83 degrees,
+which is anatomy rather than a limit.

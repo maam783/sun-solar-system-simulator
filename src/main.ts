@@ -234,9 +234,14 @@ let wasDestroyed = false;
  * 15 deg/s — and one over the damping is how long it takes to get there, or to
  * settle again once the key is released.
  */
-const STEER_TORQUE = 0.16;
-const HELD_DAMPING = 0.6;
-const FREE_DAMPING = 0.45;
+// It was 0.16 over 0.6 — a top rate of 15 deg/s reached in under two seconds,
+// so a tap was already most of a turn. Real attitude thrusters on a ship this
+// size are a rounding error against its moment of inertia; these are a quarter
+// of the authority and take four seconds to reach 8 deg/s, which is slow
+// enough that lining something up is a decision rather than a twitch.
+const STEER_TORQUE = 0.04;
+const HELD_DAMPING = 0.28;
+const FREE_DAMPING = 0.22;
 const steerRate = { pitch: 0, yaw: 0 };
 
 const scenario = installScenario();
