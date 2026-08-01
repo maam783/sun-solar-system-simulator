@@ -15,8 +15,9 @@ Used to validate the orbital elements. Public domain (NASA/JPL-Caltech).
 
 ## Audio
 
-`audio/ambient.mp3`, `audio/hum.mp3`, `audio/drive.mp3`, `audio/creak.mp3`,
-`audio/rcs.mp3`, `audio/warp.mp3` and `audio/rumble.mp3` were
+The audio — four ambient beds, the hull hum, the drive, the attitude
+thrusters, the override spool-up, the proximity swell and sixteen lines of
+radio traffic — was
 generated with ElevenLabs (music and sound-effects models) for this project.
 
 The radio beacon is not a recording. It is synthesised at run time from the real

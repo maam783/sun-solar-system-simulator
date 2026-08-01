@@ -19,12 +19,16 @@
  */
 
 const FILES = [
-  'ambient', 'hum', 'drive', 'rcs', 'warp', 'rumble',
-  'voice1', 'voice2', 'voice3', 'voice4', 'voice5', 'voice6',
+  'ambient', 'ambient2', 'ambient3', 'ambient4', 'hum', 'drive', 'rcs', 'warp', 'rumble',
+  'voice1', 'voice2', 'voice3', 'voice4', 'voice5', 'voice6', 'voice7', 'voice8', 'voice9', 'voice10', 'voice11', 'voice12', 'voice13', 'voice14', 'voice15', 'voice16',
 ] as const;
 
-/** The lines of traffic, picked from at random. */
-const VOICES = ['voice1', 'voice2', 'voice3', 'voice4', 'voice5', 'voice6'] as const;
+/**
+ * The music, and the traffic. Both are drawn from without immediate repeats,
+ * because the thing that gives a loop away is hearing it come round again.
+ */
+const BEDS = ['ambient', 'ambient2', 'ambient3', 'ambient4'] as const;
+const VOICES = ['voice1', 'voice2', 'voice3', 'voice4', 'voice5', 'voice6', 'voice7', 'voice8', 'voice9', 'voice10', 'voice11', 'voice12', 'voice13', 'voice14', 'voice15', 'voice16'] as const;
 type Clip = (typeof FILES)[number];
 
 /**
@@ -39,17 +43,23 @@ type Clip = (typeof FILES)[number];
  * because it is the only one that means anything.
  */
 const LEVEL: Record<Clip, number> = {
-  ambient: 0.26,
+  // The four beds came out 3.5 dB apart (-14.5, -12.6, -15.2, -16.1 dBFS), and
+  // a crossfade between takes at different levels is a crossfade you can hear.
+  // These equalise them to about -30 dBFS played, whichever one is up.
+  ambient: 0.216,
+  ambient2: 0.174,
+  ambient3: 0.234,
+  ambient4: 0.26,
   // The one sound that is always there, so it is the one that must not be
   // noticed. It sat at -24.8 dBFS, which is audible on its own with the music
   // off; this is 6 dB down from that.
   hum: 0.05,
   drive: 0.40,
-  // Felt through the hull rather than heard as a jet. The file is -35 dBFS
-  // with its energy all in the first third, so this puts each pulse at about
-  // -26 dBFS — present, and well under the continuous hiss at -24 that was
-  // reported as far too loud.
-  rcs: 1.6,
+  // The replacement sample is a proper knock — peak 0.477 reached in 14 ms,
+  // crest factor 22.7 dB — where the one before it was a soft blub. It is also
+  // three and a half times hotter in the peak, so the gain comes down by the
+  // same amount rather than the pulse train arriving at half scale.
+  rcs: 0.85,
   warp: 0.45,
   rumble: 0.50,
   // Measured against the old chain rather than guessed: limiting the speech
@@ -58,7 +68,22 @@ const LEVEL: Record<Clip, number> = {
   // is the character and not the volume — the crest factor falls from 20.6 dB
   // to 12.1, which is the constant pressure a radio link has and the part that
   // filtering alone could never supply.
-  voice1: 0.2, voice2: 0.2, voice3: 0.2, voice4: 0.2, voice5: 0.2, voice6: 0.2,
+  voice1: 0.2,
+  voice2: 0.2,
+  voice3: 0.2,
+  voice4: 0.2,
+  voice5: 0.2,
+  voice6: 0.2,
+  voice7: 0.2,
+  voice8: 0.2,
+  voice9: 0.2,
+  voice10: 0.2,
+  voice11: 0.2,
+  voice12: 0.2,
+  voice13: 0.2,
+  voice14: 0.2,
+  voice15: 0.2,
+  voice16: 0.2,
 };
 
 export class Ambience {
@@ -71,6 +96,7 @@ export class Ambience {
   private nextRumble = 0;
   private rcsActive = false;
   private nextPulse = 0;
+  private lastBed: Clip | null = null;
 
   muted = false;
   /** True once the browser has let us make a sound. */
@@ -96,7 +122,7 @@ export class Ambience {
 
       await Promise.all(FILES.map((name) => this.load(name)));
 
-      this.loop('ambient');
+      this.startBed();
       this.loop('hum');
       this.loop('drive', 0);
       // Fade the whole thing up over a few seconds, so it arrives rather than
@@ -113,6 +139,44 @@ export class Ambience {
     const response = await fetch(`${this.basePath}/${name}.mp3`);
     if (!response.ok) throw new Error(`no audio ${name}`);
     this.buffers.set(name, await this.ctx!.decodeAudioData(await response.arrayBuffer()));
+  }
+
+  /**
+   * The music: one bed at a time, drawn at random, each fading into the next.
+   *
+   * A single two-minute loop is recognisable by its third pass, and once you
+   * have heard the seam you cannot stop hearing it. Four beds in the same
+   * register, never the same one twice running, and an eight-second crossfade
+   * that starts before the outgoing one ends, means there is no seam to find:
+   * what comes round is the *character*, not the take.
+   */
+  private startBed(): void {
+    if (!this.ctx || !this.master) return;
+    const choices = BEDS.filter((b) => b !== this.lastBed && this.buffers.has(b));
+    const pick = (choices.length ? choices : BEDS.filter((b) => this.buffers.has(b)))[
+      Math.floor(Math.random() * (choices.length || BEDS.length))
+    ];
+    const buffer = pick ? this.buffers.get(pick) : undefined;
+    if (!pick || !buffer) return;
+    this.lastBed = pick;
+
+    const FADE = 8;
+    const now = this.ctx.currentTime;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(LEVEL[pick], now + FADE);
+    gain.gain.setValueAtTime(LEVEL[pick], now + buffer.duration - FADE);
+    gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
+    source.connect(gain).connect(this.master);
+    source.start(now);
+    source.stop(now + buffer.duration + 0.1);
+
+    // Bring the next one in while this one is still going out, so the two
+    // overlap rather than meet.
+    window.setTimeout(
+      () => this.startBed(), Math.max(1000, (buffer.duration - FADE) * 1000));
   }
 
   private loop(name: Clip, level = LEVEL[name]): void {
@@ -181,7 +245,11 @@ export class Ambience {
       : this.master.gain.value;
 
     if (this.rcsActive && this.ctx.currentTime > this.nextPulse) {
-      this.nextPulse = this.ctx.currentTime + 0.19 + Math.random() * 0.1;
+      // Slower than the first attempt, which at four a second turned a soft
+      // sample into bubbling. Real attitude pulses are irregular and further
+      // apart than that; the wide jitter is what stops a train of identical
+      // transients reading as a machine.
+      this.nextPulse = this.ctx.currentTime + 0.26 + Math.random() * 0.26;
       this.oneShot('rcs');
     }
 

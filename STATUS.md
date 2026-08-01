@@ -738,3 +738,26 @@ Measured on a rendered three-second train: **-26.1 dBFS overall, -22.7 during a
 pulse**, peak 0.156, no clipping. Against -60 before, and still less intrusive
 than the -24.3 dBFS of continuous hiss that was reported as far too loud,
 because it pulses rather than stands.
+
+### Twentieth round — a knock instead of a bubble, and no loop to find
+
+**The thrusters bubbled.** The sample was the fault, and it was the fault I
+asked for: "dull, muffled, almost no hiss" produces a soft blub, and four of
+those a second is bubbling. From inside a hull a reaction control thruster is a
+hammer blow on a bulkhead with a short gas tail. The replacement measures
+**peak 0.477 reached in 14 ms, crest factor 22.7 dB** — a transient rather than
+a swell — and the rate is down from four a second to two and a half, with the
+jitter widened so a train of identical knocks does not turn into a machine.
+Rendered: -27 dBFS, peak 0.41, no clipping.
+
+**Sixteen lines of traffic instead of six**, and flatter. Stability at maximum
+and style at zero, at 0.88 speed, on a level narration voice — a console
+operator reads numbers off a screen, and nothing about it is good news. Two
+voices now, an operator and a distant station, because traffic has two ends.
+
+**Four ambient beds instead of one, crossfading.** A two-minute loop is
+recognisable by its third pass and unhearable afterwards. Each bed fades in
+over eight seconds, holds, and fades out while the next is already coming up,
+and the next is never the one just played. The four came out 3.5 dB apart
+(-14.5, -12.6, -15.2, -16.1 dBFS), which would have made every crossfade a
+step, so the gains equalise them to about -30 dBFS played whichever is up.
