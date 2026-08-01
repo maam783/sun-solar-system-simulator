@@ -45,9 +45,11 @@ const LEVEL: Record<Clip, number> = {
   // off; this is 6 dB down from that.
   hum: 0.05,
   drive: 0.40,
-  // Attitude thrusters are felt through the hull, not heard as a jet. The
-  // first one was a hiss at 0.30 and wrong on both counts.
-  rcs: 0.11,
+  // Felt through the hull rather than heard as a jet. The file is -35 dBFS
+  // with its energy all in the first third, so this puts each pulse at about
+  // -26 dBFS — present, and well under the continuous hiss at -24 that was
+  // reported as far too loud.
+  rcs: 1.6,
   warp: 0.45,
   rumble: 0.50,
   // Measured against the old chain rather than guessed: limiting the speech
@@ -67,8 +69,8 @@ export class Ambience {
   private started = false;
   private nextBeacon = 0;
   private nextRumble = 0;
-  private rcsGain: GainNode | null = null;
-  private rcsSource: AudioBufferSourceNode | null = null;
+  private rcsActive = false;
+  private nextPulse = 0;
 
   muted = false;
   /** True once the browser has let us make a sound. */
@@ -136,40 +138,26 @@ export class Ambience {
   }
 
   /**
-   * Attitude thrusters, held on while the ship is being steered.
+   * Attitude thrusters, while the ship is being steered.
    *
-   * The first version fired the whole sample on each key press and let it run,
-   * so the thrusters kept going long after the key was released — which is
-   * both wrong and, as reported, obviously wrong. Cold gas stops when the
-   * valve shuts. This loops while the key is down and closes in 80 ms, which
-   * is about how fast a real valve seats.
+   * Pulses, not a loop. Two attempts got this wrong in opposite directions:
+   * the first fired a whole sample per key press and let it run on after the
+   * key was released, and the second looped the sample — but the loop window
+   * exists to skip MP3 padding on the two-minute beds, and applied to a
+   * one-second clip it played 0.05 s to 0.6 s of a file whose only sound is in
+   * the first third. That measured -60 dBFS, which is why the thrusters went
+   * silent.
+   *
+   * A cold-gas thruster does not hold anyway: it fires in pulses, and holding a
+   * valve open is not how attitude is trimmed. So this fires the puff about
+   * five times a second while a key is down, with enough jitter that it does
+   * not become a drum machine, and simply stops scheduling when the key comes
+   * up — the pulse already in flight finishes on its own, which is what a valve
+   * closing sounds like.
    */
   steering(active: boolean): void {
-    if (!this.ctx || !this.master) return;
-    if (active && !this.rcsGain) {
-      const buffer = this.buffers.get('rcs');
-      if (!buffer || this.muted) return;
-      const source = this.ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-      const gain = this.ctx.createGain();
-      gain.gain.value = 0;
-      gain.gain.linearRampToValueAtTime(LEVEL.rcs, this.ctx.currentTime + 0.04);
-      source.connect(gain).connect(this.master);
-      source.start();
-      this.rcsSource = source;
-      this.rcsGain = gain;
-    } else if (!active && this.rcsGain && this.rcsSource) {
-      const gain = this.rcsGain;
-      const source = this.rcsSource;
-      const at = this.ctx.currentTime;
-      gain.gain.cancelScheduledValues(at);
-      gain.gain.setValueAtTime(gain.gain.value, at);
-      gain.gain.linearRampToValueAtTime(0, at + 0.08);
-      source.stop(at + 0.1);
-      this.rcsGain = null;
-      this.rcsSource = null;
-    }
+    if (active && !this.rcsActive) this.nextPulse = 0;
+    this.rcsActive = active;
   }
 
   /**
@@ -191,6 +179,11 @@ export class Ambience {
     this.master.gain.value = this.muted
       ? Math.max(0, this.master.gain.value - dt * 2)
       : this.master.gain.value;
+
+    if (this.rcsActive && this.ctx.currentTime > this.nextPulse) {
+      this.nextPulse = this.ctx.currentTime + 0.19 + Math.random() * 0.1;
+      this.oneShot('rcs');
+    }
 
     // Close to something enormous.
     if (nearness > 0.35 && this.ctx.currentTime > this.nextRumble) {

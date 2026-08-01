@@ -712,3 +712,29 @@ a leftover from when the mouse steered the hull. A nose has a forward; a head
 does not. Yaw wraps freely now (measured: 4,800 px of drag comes out at 25
 degrees rather than jammed at 155), and only pitch keeps a stop, at 83 degrees,
 which is anatomy rather than a limit.
+
+### Nineteenth round — the thrusters had gone silent
+
+Reported, and correct. Two faults compounding.
+
+The replacement sample is front-loaded: one second long, -35 dBFS overall, with
+all of its energy in the first third (-30.2 dBFS) and silence after (-61.6 and
+-80.1). That is exactly what was asked of it — a quarter-second puff — and the
+wrong shape for anything sustained.
+
+Then the loop window cut the sound out. `loopStart`/`loopEnd` exist to skip MP3
+padding on the two-minute beds; applied to a one-second clip they play 0.05 s to
+0.6 s, which is mostly the silent part. Measured: **-40.8 dBFS in the window,
+-60 dBFS after the gain**. Inaudible, and inaudible for a reason that had
+nothing to do with the level it was set to.
+
+Fixed by not looping at all, which is also more nearly right: a cold-gas
+thruster fires in pulses and is not held open to trim attitude. The puff now
+repeats about four times a second while a key is down, jittered so it does not
+turn into a drum machine, and scheduling simply stops on release — the pulse in
+flight finishes by itself, which is what a valve closing sounds like.
+
+Measured on a rendered three-second train: **-26.1 dBFS overall, -22.7 during a
+pulse**, peak 0.156, no clipping. Against -60 before, and still less intrusive
+than the -24.3 dBFS of continuous hiss that was reported as far too loud,
+because it pulses rather than stands.
