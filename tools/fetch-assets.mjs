@@ -33,6 +33,12 @@ const TEXTURES = {
   'earth.jpg': [`${SSS}/2k_earth_daymap.jpg`],
   'earth_night.jpg': [`${SSS}/2k_earth_nightmap.jpg`],
   'moon.jpg': [`${SSS}/2k_moon.jpg`],
+  // Close-approach maps: four times the linear detail, loaded after the small
+  // ones so a first frame never waits on twenty-four megabytes.
+  'moon_hi.jpg': [`${SSS}/8k_moon.jpg`],
+  'earth_hi.jpg': [`${SSS}/8k_earth_daymap.jpg`],
+  'mars_hi.jpg': [`${SSS}/8k_mars.jpg`],
+  'jupiter_hi.jpg': [`${SSS}/8k_jupiter.jpg`, `${SSS}/4k_jupiter.jpg`],
   'mars.jpg': [`${SSS}/2k_mars.jpg`],
   'jupiter.jpg': [`${SSS}/2k_jupiter.jpg`],
   'saturn.jpg': [`${SSS}/2k_saturn.jpg`],

@@ -52,6 +52,26 @@ export interface FlybyRoute {
    * matter to the shot, and the geometry is real on whatever date it lands.
    */
   needsLitSubject?: boolean;
+  /**
+   * Phase to wait for, as a lit fraction of the subject's disc. Defaults to
+   * "as full as possible".
+   *
+   * Full is not always what a shot wants. The Apollo 8 photograph is a *half*
+   * Earth, and that is not a limitation of it — a fully lit disc has no
+   * terminator, no shape and no direction of light, and it puts the Sun
+   * directly behind the observer, which is the flattest light there is.
+   */
+  litTarget?: number;
+  /**
+   * Camera pitch relative to the subject, degrees. Positive tilts up.
+   *
+   * A camera aimed straight at the subject is the obvious thing and, for a
+   * shot where the subject starts *behind* something, the wrong one: it fills
+   * the frame with featureless ground and gives the eye nothing to hold on to.
+   * Tilting up puts the horizon in the lower third, so there is a hard edge
+   * against black sky and somewhere for the subject to arrive from.
+   */
+  aimPitch?: number;
   stops: FlybyStop[];
 }
 
@@ -110,6 +130,26 @@ function hyperbolaStops(opts: {
   return stops;
 }
 
+/**
+ * Waypoints along a circular orbit in the scenic XY plane, by angle from the
+ * -X axis. Used where a shot wants a steady rate rather than an encounter.
+ */
+function circularStops(opts: {
+  radius: number; from: number; to: number; seconds: number; samples?: number;
+}): FlybyStop[] {
+  const n = opts.samples ?? 13;
+  const stops: FlybyStop[] = [];
+  for (let i = 0; i < n; i++) {
+    const deg = opts.from + ((opts.to - opts.from) * i) / (n - 1);
+    const a = (deg * Math.PI) / 180;
+    stops.push({
+      at: [-opts.radius * Math.cos(a), opts.radius * Math.sin(a), 0],
+      seconds: i === 0 ? 0 : opts.seconds / (n - 1),
+    });
+  }
+  return stops;
+}
+
 export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   {
     id: 'saturn-rings',
@@ -141,10 +181,17 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
   {
     id: 'earthrise',
     name: 'Earthrise from the Moon',
-    blurb: 'Hold behind the lunar limb and let Earth climb over it.',
+    blurb: 'Low over the far side at dawn, until Earth comes up over the edge.',
     body: 'moon',
     subject: 'earth',
     needsLitSubject: true,
+    // A half Earth, as in the photograph. It also puts the Sun far enough round
+    // to rake the ground the ship is crossing, which is where the shot gets its
+    // shadows.
+    litTarget: 0.55,
+    // Horizon in the lower third. Earth then arrives from the bottom of the
+    // frame rather than being sat on from the start.
+    aimPitch: 9,
     // Long lens: Earth spans 1.8 degrees from here, so a normal field of view
     // makes it a speck above an enormous grey horizon.
     //
@@ -155,13 +202,24 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     // offset is under one radius and clear past it, so the shot lives in the
     // narrow band either side of that.
     fov: 24,
-    stops: [
-      { at: [-1.46, -0.30, 0.10], seconds: 0 },
-      { at: [-1.45, 0.25, 0.06], seconds: 12 },
-      { at: [-1.45, 0.80, 0.03], seconds: 12 },
-      { at: [-1.45, 1.08, 0.02], seconds: 10 },
-      { at: [-1.46, 1.32, 0.02], seconds: 12 },
-    ],
+    // A circular orbit at 1.09 radii — 156 km up, near enough to Apollo 8's 110
+    // that the ground moves at the same sort of rate, and low enough that the
+    // horizon is close and the surface streams. Constant radius matters: it is
+    // what makes the line of sight turn at a constant rate, which is what makes
+    // Earth come up steadily instead of jumping.
+    //
+    // The window is narrow and has to be found rather than guessed. At 1.09
+    // radii the Moon's limb sits 66.5 degrees off the direction to Earth
+    // (asin(1/1.09)), and Earth's disc is 1.9 degrees across — so the whole
+    // rise happens inside 1.9 degrees of orbital angle, from 65.55 to 67.45.
+    // The first attempt swept 108 degrees and put all of that in under a
+    // second, which is precisely what was reported.
+    //
+    // So the arc is 6.5 degrees, straddling the window: 28 seconds of ground
+    // going by with the sky still empty, 27 seconds of Earth coming up, and
+    // half a minute of it hanging there. Apollo 8 took 37 seconds over the
+    // same rise, at 0.051 deg/s; this runs at 0.072.
+    stops: circularStops({ radius: 1.09, from: 63.5, to: 70, seconds: 90 }),
   },
   {
     id: 'io-jupiter',
@@ -219,6 +277,7 @@ const subjectVel = vec();
 const tmp = vec();
 const posA = vec();
 const posB = vec();
+const aimUp = vec();
 
 /**
  * Build the frame a route's offsets are measured in.
@@ -322,14 +381,16 @@ export const litFraction = (bodyId: string, subjectId: string, t: number): numbe
  * Steps two hours at a time over two months — long enough to cover a lunar
  * cycle several times over. Returns the original time if nothing better exists.
  */
-export const findLitTime = (bodyId: string, subjectId: string, t0: number): number => {
+export const findLitTime = (
+  bodyId: string, subjectId: string, t0: number, target = 0.98,
+): number => {
   const STEP = 2 * 3600;
   const SPAN = 60 * 86400;
   let best = t0;
-  let bestLit = litFraction(bodyId, subjectId, t0);
-  if (bestLit > 0.75) return t0;
+  let bestLit = -Math.abs(litFraction(bodyId, subjectId, t0) - target);
+  if (bestLit > -0.03) return t0;
   for (let dt = STEP; dt <= SPAN; dt += STEP) {
-    const lit = litFraction(bodyId, subjectId, t0 + dt);
+    const lit = -Math.abs(litFraction(bodyId, subjectId, t0 + dt) - target);
     if (lit > bestLit) {
       bestLit = lit;
       best = t0 + dt;
@@ -513,6 +574,20 @@ export class FlybyDirector {
     ephemeris.state(subject, t, subjectPos, subjectVel);
     sub(outLook, subjectPos, outPos);
     normalize(outLook, outLook);
+
+    // Tilt the aim off the subject, in the camera's own vertical plane.
+    if (this.route.aimPitch) {
+      const angle = (this.route.aimPitch * Math.PI) / 180;
+      cross(tmp, outLook, axisZ);          // camera right
+      if (len(tmp) > 1e-9) {
+        normalize(tmp, tmp);
+        cross(aimUp, tmp, outLook);        // camera up
+        normalize(aimUp, aimUp);
+        scale(outLook, outLook, Math.cos(angle));
+        addScaled(outLook, outLook, aimUp, Math.sin(angle));
+        normalize(outLook, outLook);
+      }
+    }
     // Keep the body's own axis up, so a ring plane reads as horizontal.
     copy(outUp, axisZ);
 

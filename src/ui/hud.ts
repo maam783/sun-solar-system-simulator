@@ -131,13 +131,19 @@ export class Hud {
     const wake = (): void => {
       this.idleAt = performance.now() + 4000;
       this.root.classList.remove('idle');
+      document.body.classList.remove('idle');
     };
     for (const event of ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const) {
       window.addEventListener(event, wake, { passive: true });
     }
     wake();
     setInterval(() => {
-      if (performance.now() > this.idleAt) this.root.classList.add('idle');
+      if (performance.now() > this.idleAt) {
+        this.root.classList.add('idle');
+        // The cursor is furniture too, and a pointer parked in the middle of
+        // Saturn is exactly as much of an intrusion as a panel would be.
+        document.body.classList.add('idle');
+      }
     }, 500);
   }
 

@@ -381,6 +381,26 @@ export class SolarSystemRenderer {
       });
     }
 
+    // A second, much larger map for the bodies you actually get close to.
+    //
+    // 2048 across is 5.3 km per pixel on the Moon, which is a fine globe from
+    // orbit and obvious mush from a hundred kilometres up — past about 1:1
+    // magnification the eye stops reading terrain and starts reading a
+    // photograph being enlarged, which is the illusion this exists to avoid.
+    // These are 8192 across: four times the linear detail.
+    //
+    // They arrive second and swap in when they land. Twenty-four megabytes is
+    // not something to put in front of a first frame, so the small map holds
+    // the view until the large one has decoded and nothing waits for it.
+    for (const id of ['moon', 'earth', 'mars', 'jupiter']) {
+      const view = this.views.get(id);
+      if (!view) continue;
+      load(`${id}_hi.jpg`, (texture) => {
+        view.material.uniforms.uMap!.value = texture;
+        view.material.uniforms.uHasMap!.value = true;
+      });
+    }
+
     load('earth_night.jpg', (texture) => {
       const earth = this.views.get('earth');
       if (!earth) return;
@@ -503,13 +523,22 @@ export class SolarSystemRenderer {
     const level = solarIrradiance(distance) / 1361;
     // Exponent below 1 leaves some of the real falloff visible.
     //
+    // It was 0.85, and that was very nearly no falloff at all: the sunlight
+    // between the Moon and Pluto varies by 1500 to 1, and an exponent that high
+    // opens the exposure by 420x to meet it, leaving a ratio of 3.6. Measured on
+    // screen, every body came out at much the same brightness — Pluto's mean was
+    // 126 against the Moon's 108 — which is why they all read as *lit up*
+    // rather than lit. An eye does adapt, but not to the point of abolishing
+    // the difference between noon and dusk. At 0.55 about a seventh of the real
+    // range survives, which is enough to feel the Sun receding.
+    //
     // The floor matters more than it looks. A lit surface's radiance does not
     // depend on how far away the observer is - only the solid angle does - so
     // the Sun's disc emits the same value from Mercury as from Pluto. Letting
     // the exposure close arbitrarily far while approaching the Sun would
     // therefore make the Sun get *darker* as you fly into it. Stopping the
     // adaptation here keeps it blazing, which is both correct and the point.
-    const target = Math.max(0.3, Math.min(4000, Math.pow(1 / level, 0.85)));
+    const target = Math.max(0.3, Math.min(4000, Math.pow(1 / level, 0.55)));
     // Adaptation takes a moment, as it does for eyes.
     this.exposure += (target - this.exposure) * 0.08;
     this.renderer.toneMappingExposure = this.exposure;

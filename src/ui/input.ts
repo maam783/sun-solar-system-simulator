@@ -183,11 +183,9 @@ export class InputController {
     }, { passive: false });
   }
 
-  private lastDt = 1 / 60;
 
   /** Refresh the command struct. Called once per rendered frame. */
   update(dt: number): ShipCommand {
-    this.lastDt = dt;
     const held = (code: string) => (this.keys.has(code) ? 1 : 0);
 
     const forward = held('KeyW') - held('KeyS');
@@ -220,14 +218,7 @@ export class InputController {
    * and yaw to apply to the nose this frame.
    */
   consumeLook(): { pitch: number; yaw: number } {
-    const held = (code: string) => (this.keys.has(code) ? 1 : 0);
-    // The arrows are the steering. They used to turn at 51 deg/s, which is a
-    // rate for dodging, not for lining up a planet; this is a fifth of that,
-    // and holding shift is a fifth again for the last bit of framing.
-    const rate = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 0.04 : 0.2);
-    const keyPitch = (held('ArrowUp') - held('ArrowDown')) * rate * this.lastDt;
-    const keyYaw = (held('ArrowLeft') - held('ArrowRight')) * rate * this.lastDt;
-    const out = { pitch: this.lookPitch + keyPitch, yaw: this.lookYaw + keyYaw };
+    const out = { pitch: this.lookPitch, yaw: this.lookYaw };
     this.lookPitch = 0;
     this.lookYaw = 0;
     return out;
@@ -238,6 +229,20 @@ export class InputController {
     const held = (code: string) => (this.keys.has(code) ? 1 : 0);
     const fine = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 0.22 : 1;
     return (held('KeyW') - held('KeyS')) * fine;
+  }
+
+  /**
+   * Steering demand, -1 to 1 on each axis. What is done with it is the caller's
+   * business: the ship has mass, so this is a request for torque and not a
+   * change of heading.
+   */
+  steerAxis(): { pitch: number; yaw: number } {
+    const held = (code: string) => (this.keys.has(code) ? 1 : 0);
+    const fine = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 0.25 : 1;
+    return {
+      pitch: (held('ArrowUp') - held('ArrowDown')) * fine,
+      yaw: (held('ArrowLeft') - held('ArrowRight')) * fine,
+    };
   }
 
   /** Face front again. */

@@ -281,7 +281,8 @@ export class World {
     if (route.needsLitSubject && route.subject) {
       // Move to a date when the shot is actually lit, rather than showing a
       // new Earth and calling it an Earthrise.
-      this.clock.t = findLitTime(route.body, route.subject, this.clock.t);
+      this.clock.t = findLitTime(
+        route.body, route.subject, this.clock.t, route.litTarget ?? 0.98);
       this.updateBodyStates();
     }
     this.flyby.start(route);

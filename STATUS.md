@@ -620,3 +620,56 @@ loudness, and there are three new sounds tied to things that actually occur —
 a cold-gas puff on steering, a spool-up on the override drive, and a sub-bass
 swell when passing close to something enormous. The beacon is a third as loud
 and roughly half as frequent.
+
+### Seventeenth round — sound, weight, light, and the Earthrise
+
+**Sound.** The hull creak is gone. The attitude thrusters were a hiss that kept
+running after the key was released, because a whole sample was fired off on
+each press; they now loop while the valve is open and close in 80 ms, at a
+third of the level. And the radio carries a voice: six invented lines of
+traffic that name no mission, place or date, band-limited at run time to the
+300-3,000 Hz a voice circuit passes, with a presence peak at 1.7 kHz, sitting
+between the same real Quindar tones as before. Yes, those were already there —
+they were mixed at 0.028 and roughly inaudible, which is why they were reported
+missing. They are at 0.075 now and carry the speech.
+
+**Weight.** Steering was an angle added per frame, which is exactly as digital
+as it read. The arrows now ask for torque: rate builds over about 1.7 s and
+settles over 2.2 when released, topping out near 15 deg/s. The decay is the
+flight assistant trimming the rate out, not friction — there is none.
+
+**Light.** Researched rather than adjusted. A Lambertian surface sits at
+L = E x albedo / pi, so at true scale the Moon is 4,850 cd/m2, Earth 12,130,
+Jupiter 780, Saturn 210 and Pluto 13 — against a computer monitor at 300 and
+sunlit snow at 30,000. Bright, then, and Earth genuinely is 2.5x the Moon. But
+the adaptation exponent was 0.85, which opens the exposure 420x across a 1500:1
+range and leaves a ratio of 3.6 — measured on screen, Pluto came out at mean
+126 against the Moon's 108. Everything was equally lit. At 0.55 about a seventh
+of the real range survives. Nothing was clipping, so this is not a brightness
+cut; it is the falloff being allowed to show.
+
+**Textures.** 2048 across is 5.3 km per pixel on the Moon — a fine globe from
+orbit and obvious mush from 157 km up. The Moon, Earth, Mars and Jupiter now
+have 8192-wide maps, four times the linear detail, loaded *after* the small
+ones and swapped in on arrival so no first frame waits on 24 MB.
+
+**The Earthrise, rebuilt.** Every complaint about it was a separate fault:
+
+- *No orientation.* The camera aimed straight at Earth, which is straight at
+  the ground while Earth is behind the Moon. Routes can now tilt the aim off
+  the subject; this one is 9 degrees up, so the horizon sits in the lower third
+  and Earth arrives from the bottom of the frame.
+- *Over in half a second.* The old arc swept 108 degrees. The geometry says the
+  window is 1.9 degrees wide: at 1.09 radii the limb sits 66.5 degrees off the
+  Earth direction, and Earth's disc is 1.9 across, so the rise happens between
+  65.55 and 67.45 degrees of orbital angle and nowhere else. The arc is now 6.5
+  degrees straddling exactly that. Measured: 36 s of ground going by under an
+  empty sky, **20 s of Earth coming up**, 44 s of it hanging there.
+- *A full Earth.* Routes can now ask for a phase rather than for maximum light.
+  This one asks for 0.55 and gets it — a half Earth, as in the photograph, and
+  it puts the Sun far enough round to rake the ground the ship is crossing.
+- Altitude is a constant 157 km, near enough to Apollo 8's 110 that the ground
+  moves at the same sort of rate.
+
+Not done this round, and worth saying plainly: more routes, and music timed to
+the moment of the rise.

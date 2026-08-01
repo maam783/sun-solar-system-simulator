@@ -228,7 +228,16 @@ let fpsAccumulator = 0;
 let fpsFrames = 0;
 let fps = 60;
 let wasDestroyed = false;
-let wasSteering = false;
+
+/**
+ * Attitude response. Torque over damping is the top rate — 0.16 / 0.6 is about
+ * 15 deg/s — and one over the damping is how long it takes to get there, or to
+ * settle again once the key is released.
+ */
+const STEER_TORQUE = 0.16;
+const HELD_DAMPING = 0.6;
+const FREE_DAMPING = 0.45;
+const steerRate = { pitch: 0, yaw: 0 };
 
 const scenario = installScenario();
 
@@ -262,8 +271,24 @@ const frame = (now: number): void => {
       input.headPitch = 0;
       input.headYaw = 0;
     }
+    // Steering has mass. The arrows ask for torque from the attitude
+    // thrusters, and the rate builds and decays instead of switching — a ship
+    // of this size cannot start and stop turning within one frame, and the
+    // previous version, which simply added an angle per frame, read exactly as
+    // digital as it was. The decay when nothing is held is the flight
+    // assistant trimming the rate out, not friction; there is none.
+    const steer = input.steerAxis();
+    const damping = (steer.pitch === 0 && steer.yaw === 0) ? FREE_DAMPING : HELD_DAMPING;
+    steerRate.pitch += (steer.pitch * STEER_TORQUE - steerRate.pitch * damping) * dtReal;
+    steerRate.yaw += (steer.yaw * STEER_TORQUE - steerRate.yaw * damping) * dtReal;
+    if (Math.abs(steerRate.pitch) < 1e-5) steerRate.pitch = 0;
+    if (Math.abs(steerRate.yaw) < 1e-5) steerRate.yaw = 0;
+
     const look = input.consumeLook();
-    world.ship.aim(look.pitch, look.yaw, command.roll * 1.6 * dtReal);
+    world.ship.aim(
+      look.pitch + steerRate.pitch * dtReal,
+      look.yaw + steerRate.yaw * dtReal,
+      command.roll * 1.6 * dtReal);
     const ceiling = PilotDrive.ceiling(
       world.ship.mode, world.ship.overrideStage, world.nearest.altitude);
     world.pilot.throttle(input.throttleAxis(), dtReal, ceiling);
@@ -307,11 +332,9 @@ const frame = (now: number): void => {
     1 - world.nearest.altitude / (radius * 2.5)));
   ambience.update(burning ? 1 : 0, dtReal, nearness);
 
-  // Steering has a voice of its own: a puff of cold gas, once per press.
-  const steering = input.isHeld('ArrowUp') || input.isHeld('ArrowDown')
-    || input.isHeld('ArrowLeft') || input.isHeld('ArrowRight');
-  if (steering && !wasSteering) ambience.event('rcs');
-  wasSteering = steering;
+  // Cold gas, on while the valve is open and off when it shuts.
+  ambience.steering(input.isHeld('ArrowUp') || input.isHeld('ArrowDown')
+    || input.isHeld('ArrowLeft') || input.isHeld('ArrowRight'));
 
   hud.update(world, renderer, fps, input.pointerLocked);
   scenario?.afterFrame();
