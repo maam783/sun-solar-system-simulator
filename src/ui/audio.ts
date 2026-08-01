@@ -58,10 +58,10 @@ const LEVEL: Record<Clip, number> = {
   // off; this is 6 dB down from that.
   hum: 0.05,
   drive: 0.40,
-  // A hint and nothing more. The band above does most of the work; this puts
-  // what survives it a good ten decibels under the hull hum, so it registers
-  // as something happening rather than as a sound being played.
-  rcs: 3.4,
+  // A hint and nothing more, and ten decibels below even that after this was
+  // still too present. It now sits about 20 dB under the hull hum: audible
+  // when you are listening for it and not otherwise.
+  rcs: 1.07,
   warp: 0.45,
   rumble: 0.50,
   // Measured against the old chain rather than guessed: limiting the speech

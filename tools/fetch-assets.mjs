@@ -38,6 +38,7 @@ const TEXTURES = {
   'moon_hi.jpg': [`${SSS}/8k_moon.jpg`],
   'earth_hi.jpg': [`${SSS}/8k_earth_daymap.jpg`],
   'mars_hi.jpg': [`${SSS}/8k_mars.jpg`],
+  'earth_night_hi.jpg': [`${SSS}/8k_earth_nightmap.jpg`],
   'jupiter_hi.jpg': [`${SSS}/8k_jupiter.jpg`, `${SSS}/4k_jupiter.jpg`],
   'mars.jpg': [`${SSS}/2k_mars.jpg`],
   'jupiter.jpg': [`${SSS}/2k_jupiter.jpg`],

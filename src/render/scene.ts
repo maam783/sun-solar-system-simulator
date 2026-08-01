@@ -235,6 +235,16 @@ export class SolarSystemRenderer {
         depthWrite: false,
         depthTest: true,
         sizeAttenuation: false,
+        // Not tone-mapped, and this is the whole reason the planets all looked
+        // alike from a distance. A point source's brightness here comes from
+        // its apparent magnitude, which is already what an observer would see —
+        // the adaptation of the eye is baked into that number. Letting the
+        // scene exposure multiply it again is counting the same thing twice,
+        // and at the 15x the exposure runs at out past Jupiter every sprite
+        // saturated: measured, Jupiter and Saturn both rendered 255,255,255
+        // from twelve AU, with nothing left of #c9a882 or #d8c07a. Written
+        // straight out, each keeps its own colour.
+        toneMapped: false,
       });
       const sprite = new THREE.Sprite(spriteMaterial);
       sprite.frustumCulled = false;
@@ -414,12 +424,20 @@ export class SolarSystemRenderer {
       load(`${id}_hi.jpg`, (texture) => applyMap(view, texture));
     }
 
-    load('earth_night.jpg', (texture) => {
+    // The night side gets the large map too. It was left at 2,048 when the day
+    // side went to 8,192, so from orbit the continents were sharp and the
+    // cities they belong to were a smear.
+    let nightWidth = 0;
+    const applyNight = (texture: THREE.Texture): void => {
       const earth = this.views.get('earth');
-      if (!earth) return;
+      const width = texture.image?.width ?? 0;
+      if (!earth || width < nightWidth) return;
+      nightWidth = width;
       earth.material.uniforms.uNightMap!.value = texture;
       earth.material.uniforms.uHasNight!.value = true;
-    });
+    };
+    load('earth_night.jpg', applyNight);
+    load('earth_night_hi.jpg', applyNight);
 
     load('saturn_ring.png', (texture) => {
       const saturn = this.views.get('saturn');
@@ -589,8 +607,16 @@ export class SolarSystemRenderer {
     // A lit surface is scaled by the sunlight falling on it. The Sun itself is
     // not lit by anything: it emits, at a radiance that does not vary with
     // where the observer stands.
+    // The Sun's disc is about 1.6e9 cd/m2 — some three hundred thousand times a
+    // sunlit planet and half a million times a white monitor. No display can
+    // show that, and the only honest rendering of something that far past the
+    // top of the range is one that is *always* at the top of it: clipped, at
+    // every exposure the adaptation can reach. Seven was not enough to manage
+    // that at the floor of 0.3 — measured, the disc came out at a mean of 218
+    // from three solar radii and 53 from Earth's orbit, which is a bright lamp
+    // rather than something you cannot look at.
     const irradiance = view.def.id === 'sun'
-      ? 7
+      ? 60
       : Math.min(6, solarIrradiance(len(state.pos)) / 1361);
 
     if (useMesh) {

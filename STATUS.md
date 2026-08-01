@@ -931,3 +931,39 @@ it was rather than continuing — so changing your mind never costs you the view
 
 The attitude-hold cycle moved from C to X to make room. It is a full-console
 control and the markers it drives are not drawn in the simple view anyway.
+
+### Twenty-seventh round — the yellow blob, and the Sun
+
+**Thrusters** another 10 dB down, to about 20 dB under the hull hum.
+
+**Every distant planet was the same white dot**, and the cause is a double
+count. A point source's brightness here comes from its apparent magnitude,
+which is already what an observer sees — the eye's adaptation is inside that
+number. The sprites were then multiplied by the scene exposure as well, which
+out past Jupiter runs at 15x. Measured from twelve AU, Jupiter and Saturn both
+rendered **255,255,255**, with nothing left of #c9a882 or #d8c07a.
+
+Impostors are no longer tone-mapped, so what is written is what was asked for.
+Measured again, each now matches its own colour to two decimal places: Jupiter
+1/0.83/0.65 against a material of 1/0.84/0.65, Saturn 1/0.89/0.57 against
+1/0.89/0.57, Mars 1/0.52/0.31 against 1/0.52/0.31, Venus 1/0.93/0.72 against
+1/0.93/0.72.
+
+A note on the measuring, because it went wrong twice first: from twelve AU
+several impostors overlap and saturate, so the difference between "sprite on"
+and "sprite off" is only the *unsaturated remainder* and its hue means nothing.
+The reading that counted came from hiding the glare, the stars and every other
+body.
+
+**Earth's night side** was still on the 2,048 map while the day side went to
+8,192 — sharp continents, smeared cities. It is 8,192 now as well, and a
+smaller map cannot replace a larger one here either.
+
+**The Sun.** Its disc is about 1.6e9 cd/m2: three hundred thousand times a
+sunlit planet, half a million times a white monitor. Nothing can display that,
+and the only honest rendering of something that far past the top of the range
+is one that is *always* at the top of it, at every exposure the adaptation can
+reach. At an irradiance of 7 it was not — measured, the disc came out at a mean
+of 218 from three solar radii with nothing clipped at all, which is a bright
+lamp rather than something you cannot look at. At 60 the same view means 251
+with a fifth of it clipped, and the centre saturates at every distance.
