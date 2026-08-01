@@ -762,10 +762,24 @@ export class SolarSystemRenderer {
       sunRelative.y * scaleToNear,
       sunRelative.z * scaleToNear);
 
-    // The glare grows with the Sun's apparent size but never swamps the frame:
-    // the brightness is carried by opacity, not by covering every pixel.
-    const sunPixels = (sunAngular * 2 / fovRad) * viewportHeight;
-    const size = Math.min(viewportHeight * 1.5, 90 + sunPixels * 2.2);
+    // Size the halo in *degrees of sky*, not in pixels.
+    //
+    // It was 90 px plus a little, which from Earth's orbit is about four
+    // degrees — a small bright dot, and nothing like the presence the Sun has.
+    // The thing being drawn is not the corona: next to an unocculted
+    // photosphere the corona is a millionth of the brightness and invisible.
+    // It is the scatter inside the observer's own eye, and that reaches tens of
+    // degrees, which is why you cannot look anywhere *near* the Sun rather than
+    // merely not at it.
+    //
+    // Twenty-two degrees at the base, growing with the disc. The texture puts
+    // most of its energy inside the first fifth of the radius, so this is a
+    // hard core with a wide, faint halo rather than a uniform blob.
+    const angularDeg = (sunAngular * 2 * 180) / Math.PI;
+    const haloDeg = 22 + angularDeg * 2.5;
+    const size = Math.min(
+      viewportHeight * 2.4,
+      ((haloDeg * Math.PI) / 180 / fovRad) * viewportHeight);
     const s = (size / viewportHeight) * 2;
     this.sunGlare.scale.set(s, s, 1);
 
@@ -773,7 +787,6 @@ export class SolarSystemRenderer {
     // a disc spanning tens of degrees it *is* the sky, and a bright blob laid
     // over it only hides how big it has become — so fade the halo out as the
     // disc resolves.
-    const angularDeg = (sunAngular * 2 * 180) / Math.PI;
     const resolved = Math.max(0, Math.min(1, (angularDeg - 4) / 20));
     (this.sunGlare.material as THREE.SpriteMaterial).opacity =
       0.85 * visible * (1 - resolved);

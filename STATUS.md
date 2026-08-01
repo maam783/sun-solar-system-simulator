@@ -1000,3 +1000,45 @@ nothing about a real GPU under an 8k texture at maximum anisotropy. These are
 the causes that could be found and proved; if it persists, the remaining
 suspect is render load starving the audio thread, and that needs a machine that
 is actually drawing the thing.
+
+### Twenty-ninth round — three more sights, a bigger Sun, and the drag reversed
+
+**The drag is reversed**, as asked: the view now follows the hand. Worth
+recording that the measurement disagreed with the report — from rendered
+pixels, a 250 px drag right moved Earth's centroid from x=369 to x=96, which is
+*left*, already the convention that was asked for. It was flipped anyway,
+because the person looking at it is better evidence than a harness that had
+been wrong twice the same day. It now measures right-goes-right. Deltas also
+come from `clientX/clientY` rather than `movementX/movementY`, which some
+browsers report in physical pixels and others in CSS pixels — the same drag was
+turning twice as far on a Retina display.
+
+**The Sun's halo is sized in degrees of sky now, not pixels.** It was 90 px
+plus a little, about four degrees from Earth's orbit, which is a dot. What is
+being drawn is not the corona — beside an unocculted photosphere the corona is
+a millionth of the brightness and simply invisible — it is the scatter inside
+the observer's own eye, and that reaches tens of degrees. That is why you
+cannot look anywhere *near* the Sun rather than merely not at it. Base 22
+degrees, growing with the disc; measured, the glare now spans about 60 degrees
+of a 45-degree frame from 1 AU, a hard core in a wide faint veil.
+
+**Three new sights**, each chosen from the geometry rather than by taste:
+
+- **Dawn on the far side.** The idea was asked for, and the light is the whole
+  of it: along the terminator the Sun comes in at nothing degrees and every rim
+  and crater wall throws a shadow its own length. Measured, the solar elevation
+  under the ship runs **-8 to +14 degrees** across the pass — sunrise, exactly.
+  At 1.08 radii the Moon fills 135 degrees and stops being a globe.
+- **Mercury at perihelion.** Ten times Earth's sunlight, a two-degree Sun, and
+  nothing between the light and the rock. The arc runs from 1 degree of solar
+  elevation to 78 — dawn to nearly noon.
+- **Charon, with Pluto behind.** A twelve-hundredth of the sunlight, and the
+  only place where a body that size hangs fixed in the sky: the two are locked
+  facing each other, so from that hemisphere Pluto has never risen or set.
+
+The flypast suite then failed at 78% and was right to stop me — but it was
+measuring the wrong thing. It tested whether the subject's *centre* was in
+frame, which is the same test only while the subject is small. A route may aim
+off it on purpose; the dawn pass tilts 55 degrees up, so the Moon's centre is
+far outside a frame that contains nothing but Moon. It now tests whether any of
+the subject is on screen: 99.8%.

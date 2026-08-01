@@ -71,6 +71,8 @@ export class InputController {
   private dragging = false;
   private centring = false;
   private dragMoved = 0;
+  private lastX = 0;
+  private lastY = 0;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -164,14 +166,25 @@ export class InputController {
       this.centring = false;
       this.dragging = true;
       this.dragMoved = 0;
+      this.lastX = event.clientX;
+      this.lastY = event.clientY;
       this.canvas.style.cursor = 'grabbing';
     });
 
     window.addEventListener('mousemove', (event) => {
       if (!this.dragging) return;
-      this.dragMoved += Math.abs(event.movementX) + Math.abs(event.movementY);
-      this.headYaw -= event.movementX * SENSITIVITY;
-      this.headPitch -= event.movementY * SENSITIVITY;
+      // Deltas taken from clientX/clientY rather than movementX/movementY.
+      // The latter is reported in physical pixels by some browsers and CSS
+      // pixels by others, so the same drag turns twice as far on a Retina
+      // display as on a plain one; this is the same everywhere.
+      const dx = event.clientX - this.lastX;
+      const dy = event.clientY - this.lastY;
+      this.lastX = event.clientX;
+      this.lastY = event.clientY;
+      this.dragMoved += Math.abs(dx) + Math.abs(dy);
+      // Sign as requested: the hand carries the view with it.
+      this.headYaw += dx * SENSITIVITY;
+      this.headPitch += dy * SENSITIVITY;
       // Keep yaw in [-pi, pi] so it never grows without bound, but let it wrap
       // rather than stop.
       if (this.headYaw > Math.PI) this.headYaw -= 2 * Math.PI;

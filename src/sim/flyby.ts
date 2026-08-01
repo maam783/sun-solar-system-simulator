@@ -222,6 +222,61 @@ export const FLYBY_ROUTES: readonly FlybyRoute[] = [
     stops: circularStops({ radius: 1.09, from: 63.5, to: 70, seconds: 90 }),
   },
   {
+    id: 'moon-dawn',
+    name: 'Dawn on the far side',
+    blurb: 'Low over the Moon, into the sunrise, with every crater throwing its shadow.',
+    body: 'moon',
+    // The light is the shot. Anywhere else on a body the Sun is high and the
+    // ground is flat and grey; along the terminator it comes in at nothing
+    // degrees and every rim, ridge and crater wall throws a shadow the length
+    // of itself. That is the whole difference between a photograph of the Moon
+    // and standing on it.
+    //
+    // In this frame +X points at the Sun, so the terminator is the great circle
+    // at x = 0. The arc runs from 82 to 104 degrees, which starts a hundred and
+    // fifty kilometres inside the night side and ends well into the morning:
+    // the Sun comes up over the horizon as the ship crosses.
+    //
+    // At 1.08 radii the limb sits 67.8 degrees off the nadir, so the camera is
+    // tilted 55 up to put the horizon in the lower third — from this low, the
+    // ground fills 141 degrees and is not a globe any more, it is a landscape.
+    aimPitch: 55,
+    stops: circularStops({ radius: 1.08, from: 82, to: 104, seconds: 88 }),
+  },
+  {
+    id: 'mercury-noon',
+    name: 'Mercury at perihelion',
+    blurb: 'The hardest light in the solar system, on the ground it falls on.',
+    body: 'mercury',
+    // Ten times Earth's sunlight and a black sky: no air to soften an edge, no
+    // scattering to fill a shadow. The Sun is nearly two degrees across here,
+    // three times the disc seen from Earth, and everything it does not touch is
+    // simply black. Measured, the arc runs from one degree of solar elevation
+    // to seventy-eight — sunrise to very nearly noon — so the shadows start as
+    // long as the Moon's and are gone by the end. On Mercury the shadows are
+    // not the point; the point is that there is nothing between the light and
+    // the rock.
+    aimPitch: 38,
+    stops: circularStops({ radius: 1.22, from: 132, to: 168, seconds: 80 }),
+  },
+  {
+    id: 'charon',
+    name: 'Charon, with Pluto behind',
+    blurb: 'A twelve-hundredth of the sunlight, and two worlds locked facing each other.',
+    body: 'charon',
+    subject: 'pluto',
+    // The far end of the register. Sunlight here is 1/1250 of Earth's — noon on
+    // Charon is a deep dusk — and Pluto hangs seven degrees wide and does not
+    // move, because the two are locked facing each other: from this hemisphere
+    // Pluto has never risen and never set. It is the only place in the system
+    // where that is true of a body that large.
+    fov: 34,
+    stops: hyperbolaStops({
+      periapsis: 1.9, eccentricity: 6, argument: 180,
+      inclination: 14, entryRadius: 5.5, seconds: 78,
+    }),
+  },
+  {
     id: 'io-jupiter',
     name: 'Io, with Jupiter behind',
     blurb: 'Round the volcanic moon with Jupiter filling twenty degrees of sky.',

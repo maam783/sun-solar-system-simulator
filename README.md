@@ -32,7 +32,7 @@ date, with the planets where they actually are.
 
 ## Two ways to use it
 
-**Click a flypast.** The *Sights* panel has six of them — through Saturn's ring
+**Click a flypast.** The *Sights* panel has nine of them — through Saturn's ring
 plane, slingshots right round Jupiter, Mars and the Sun, Earthrise from behind
 the lunar limb, and Io with Jupiter filling twenty degrees of sky. The
 slingshots come in on the dark side, wrap around the body at a couple of radii
@@ -192,7 +192,7 @@ comma-separated list.
 
 | | |
 |---|---|
-| Drag | Look around — the head, not the hull |
+| Drag | Look around — the view follows the hand |
 | Click | Turn the ship to face where you are looking |
 | **W / S** | **Faster / slower** |
 | **Space** | **All stop** |

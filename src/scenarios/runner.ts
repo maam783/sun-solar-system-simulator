@@ -553,11 +553,23 @@ const flypasts: Scenario = {
       ctx.memory.maxSubjectDeg = Math.max(ctx.memory.maxSubjectDeg!,
         ctx.renderer.apparentDiameterDeg(world, subject));
 
+      // "In frame" means some of the subject is on screen, not that its centre
+      // is. Those are the same test only while the subject is small. A route
+      // may deliberately aim off it — the dawn pass over the Moon tilts 55
+      // degrees up to put the horizon low, and the Moon fills 135 degrees, so
+      // its centre is far outside the frame while the shot is nothing *but*
+      // the Moon. Measured on centres alone the suite read 78% and called that
+      // a failure; it was measuring the wrong thing.
       sub(scratchA, world.bodyState(subject).pos, world.ship.pos);
       const projected = ctx.renderer.projectDirection(scratchA);
-      if (!projected.behind && Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1) {
-        ctx.memory.onScreen = (ctx.memory.onScreen ?? 0) + 1;
-      }
+      const half = ctx.renderer.apparentDiameterDeg(world, subject) / 2;
+      // Half the frame height in degrees, as a fraction of the NDC unit.
+      const halfFovDeg = ctx.renderer.camera.fov / 2;
+      const margin = half / Math.max(1e-6, halfFovDeg);
+      const onScreen = !projected.behind
+        && Math.abs(projected.x) <= 1 + margin
+        && Math.abs(projected.y) <= 1 + margin;
+      if (onScreen) ctx.memory.onScreen = (ctx.memory.onScreen ?? 0) + 1;
       if (world.ship.destroyed) ctx.memory.deaths = (ctx.memory.deaths ?? 0) + 1;
     }
 
