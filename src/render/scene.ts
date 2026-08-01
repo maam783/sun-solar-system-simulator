@@ -65,23 +65,65 @@ interface BodyView {
  * distant body reads as the same yellow blob regardless of what it is.
  */
 const makeGlowTexture = (softness: number, warm = false): THREE.Texture => {
-  const size = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  const mid = warm ? '255,246,224' : '255,255,255';
-  const outer = warm ? '255,230,190' : '255,255,255';
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.12 * softness, `rgba(${mid},0.85)`);
-  gradient.addColorStop(0.35 * softness, `rgba(${mid},0.28)`);
-  gradient.addColorStop(0.7, `rgba(${outer},0.05)`);
-  gradient.addColorStop(1, `rgba(${outer},0)`);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-  const texture = new THREE.CanvasTexture(canvas);
+  // Built from the falloff directly, not drawn on a canvas.
+  //
+  // It used to be a 128 px canvas gradient, and the solar halo now spans
+  // twenty-odd degrees of sky — several hundred pixels — so each texel was
+  // being magnified five or six times. That is fine for a smooth function and
+  // not fine for a canvas: browsers dither low-alpha gradients, they do not
+  // agree on how, and each dithered pixel became a five-pixel blob which
+  // additive blending over a bright halo then made plainly visible. Reported
+  // as green dashes scattered through the glare, and reproducible only on the
+  // browser that dithers that way.
+  //
+  // Computing the samples here removes the browser from the question entirely,
+  // and 256 across is four times the texels into the bargain.
+  const size = 256;
+  const data = new Uint8Array(size * size * 4);
+  const mid = warm ? [255, 246, 224] : [255, 255, 255];
+  const outer = warm ? [255, 230, 190] : [255, 255, 255];
+  // The stops the canvas gradient used, as a piecewise-linear alpha in r.
+  const stops: [number, number[], number][] = [
+    [0, [255, 255, 255], 1],
+    [0.12 * softness, mid, 0.85],
+    [0.35 * softness, mid, 0.28],
+    [0.7, outer, 0.05],
+    [1, outer, 0],
+  ];
+  const at = (r: number): [number[], number] => {
+    if (r >= 1) return [outer, 0];
+    for (let i = 1; i < stops.length; i++) {
+      const [r1, c1, a1] = stops[i]!;
+      if (r > r1) continue;
+      const [r0, c0, a0] = stops[i - 1]!;
+      const f = r1 > r0 ? (r - r0) / (r1 - r0) : 0;
+      return [
+        [0, 1, 2].map((k) => c0[k]! + (c1[k]! - c0[k]!) * f),
+        a0 + (a1 - a0) * f,
+      ];
+    }
+    return [outer, 0];
+  };
+  const half = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Sample at the pixel centre, in units of the radius.
+      const dx = (x + 0.5 - half) / half;
+      const dy = (y + 0.5 - half) / half;
+      const [rgb, a] = at(Math.hypot(dx, dy));
+      const i = (y * size + x) * 4;
+      data[i] = Math.round(rgb[0]!);
+      data[i + 1] = Math.round(rgb[1]!);
+      data[i + 2] = Math.round(rgb[2]!);
+      data[i + 3] = Math.round(a * 255);
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
   return texture;
 };
 

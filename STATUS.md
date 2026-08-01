@@ -1070,3 +1070,30 @@ at 64 px so nothing else can repeat it. Measured after: worst frame of the
 Charon route is 1% lit at a mean of 33 with **0% strongly coloured**, against
 100% lit at 249 with 35% coloured before, and the largest impostor anywhere is
 7 px.
+
+### Thirty-first round — the glare was a canvas gradient
+
+Reported with a screenshot: green dashes scattered through the solar halo.
+
+Not reproducible here, on either browser available, so this is a fix for the
+most plausible cause rather than for a fault that could be caught in the act.
+What the shape says, though, is fairly specific. The marks are discrete, a few
+pixels across, spread through the halo and only where it is bright — which is
+what individual *texels* look like when magnified. The glow was a 128 px canvas
+gradient, and the halo now spans twenty-odd degrees of sky, several hundred
+pixels, so every texel was being blown up five or six times.
+
+Canvas gradients are dithered by the browser at low alpha, browsers do not
+agree on how, and additive blending over a bright halo is exactly the operation
+that turns an invisible dither pattern into visible speckle. That the artefact
+appears on Safari and not here fits a rendering path that differs by browser.
+
+The texture is now computed directly from the same piecewise falloff — no
+canvas, no browser in the question — at 256 across, four times the texels.
+Measured: the largest alpha step between neighbouring texels is 9 of 255, which
+is a smooth ramp rather than a dithered one, and a render at pixel ratio 2 into
+an 1800x1800 buffer gives 2.59 million halo pixels and **zero** green.
+
+(The first check of the texture reported 65,504 texels "with a green cast" and
+was simply a bad test: it flagged G above B, which for a warm halo is every
+texel of it. The number that means something is the alpha step.)
