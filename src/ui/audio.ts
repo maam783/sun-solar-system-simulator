@@ -18,6 +18,9 @@
  * looped MP3 tick once a bar.
  */
 
+/** Bump when any audio file is replaced. */
+const AUDIO_VERSION = 2;
+
 const FILES = [
   'ambient', 'ambient2', 'ambient3', 'ambient4', 'hum', 'drive', 'rcs', 'warp', 'rumble',
   'voice1', 'voice2', 'voice3', 'voice4', 'voice5', 'voice6', 'voice7', 'voice8', 'voice9', 'voice10', 'voice11', 'voice12', 'voice13', 'voice14', 'voice15', 'voice16',
@@ -137,7 +140,12 @@ export class Ambience {
   }
 
   private async load(name: Clip): Promise<void> {
-    const response = await fetch(`${this.basePath}/${name}.mp3`);
+    // The version is not decoration. Files under `public/` keep their names
+    // across builds, so a cache that already holds one will go on serving it —
+    // which is exactly how three different thruster sounds each went unheard.
+    // Changing the URL misses any such entry outright, so a fix arrives on the
+    // next load rather than the one after.
+    const response = await fetch(`${this.basePath}/${name}.mp3?v=${AUDIO_VERSION}`);
     if (!response.ok) throw new Error(`no audio ${name}`);
     this.buffers.set(name, await this.ctx!.decodeAudioData(await response.arrayBuffer()));
   }

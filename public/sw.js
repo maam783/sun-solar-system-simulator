@@ -2,19 +2,26 @@
  * Service worker.
  *
  * It exists because a browser will not offer to install a page as an
- * application unless one is registered with a fetch handler. That is the whole
- * of its job, and the first version of it did more than that and was worse for
- * it: caching the HTML meant an installed copy kept starting the build it was
- * installed with, so every later deploy was invisible from inside the app.
+ * application unless one is registered with a fetch handler. That is its whole
+ * job, and it has now been wrong twice by trying to do more.
  *
- * So the document is never cached. It is fetched with the HTTP cache bypassed
- * as well, because GitHub Pages serves HTML with ten minutes of freshness and
- * that is ten minutes of looking at the wrong thing. Only the build's own
- * assets are kept, and those carry a content hash in the name, so a stale one
- * can never be served for a new build — the name would not match.
+ * The first version cached the document, so an installed copy kept starting the
+ * build it was installed with. The second stopped caching the document but kept
+ * serving assets from the cache first, on the reasoning that build assets carry
+ * a content hash in the name and so can never go stale. That reasoning was
+ * false: it holds for the bundle, which Vite renames every build, and not at
+ * all for anything in `public/`, which is copied through verbatim.
+ * `assets/audio/rcs.mp3` keeps that name forever, so replacing the file changed
+ * nothing for anyone who had already loaded it once — they heard the previous
+ * take, every time, one version behind for as long as it went on.
+ *
+ * So: nothing is served from the cache while there is a network. The cache is
+ * only what makes the installed app open without one. That costs a revalidation
+ * per asset, which the HTTP cache absorbs, and it removes an entire category of
+ * bug that cost several rounds to find.
  */
 
-const CACHE = 'sun-assets-v2';
+const CACHE = 'sun-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -29,37 +36,31 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-const isDocument = (request) =>
-  request.mode === 'navigate'
-  || request.destination === 'document'
-  || new URL(request.url).pathname.endsWith('.html')
-  || new URL(request.url).pathname.endsWith('/');
+const isDocument = (request) => {
+  if (request.mode === 'navigate' || request.destination === 'document') return true;
+  const path = new URL(request.url).pathname;
+  return path.endsWith('.html') || path.endsWith('/');
+};
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) return;
 
-  if (isDocument(request)) {
-    event.respondWith((async () => {
-      try {
-        return await fetch(request, { cache: 'no-store' });
-      } catch {
-        // Offline. Anything we have is better than a browser error page.
-        const cached = await caches.match(request);
-        if (cached) return cached;
-        throw new Error('offline');
-      }
-    })());
-    return;
-  }
-
-  // Assets: serve from cache when we have them, and refresh in the background.
   event.respondWith((async () => {
-    const cached = await caches.match(request);
-    const network = fetch(request).then(async (response) => {
-      if (response.ok) (await caches.open(CACHE)).put(request, response.clone());
+    try {
+      // The document additionally bypasses the HTTP cache, because Pages serves
+      // HTML with ten minutes of freshness and that is ten minutes of looking
+      // at the wrong build.
+      const response = await fetch(request, isDocument(request) ? { cache: 'no-store' } : undefined);
+      if (response.ok && !isDocument(request)) {
+        const cache = await caches.open(CACHE);
+        cache.put(request, response.clone());
+      }
       return response;
-    }).catch(() => null);
-    return cached ?? (await network) ?? Promise.reject(new Error('offline'));
+    } catch {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      throw new Error('offline and not cached');
+    }
   })());
 });

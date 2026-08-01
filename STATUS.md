@@ -810,3 +810,28 @@ ship 13.8 degrees; it now rolls it 0.04 and leaves it turning at half a degree
 a second, which then trims itself out.
 
 The attitude thrusters hiss for roll too now, which they did not before.
+
+### Twenty-third round — it was never the sound, it was the cache
+
+Reported: the thrusters still knock, no hiss.
+
+They do, and the file is not the reason. The one on the server is byte-identical
+to the local hiss — same MD5, 129,193 bytes — and measures as broadband noise to
+11.4 kHz across eight steady seconds. What was being heard was an older take,
+out of the service worker's cache.
+
+That is my error, and specifically my reasoning: the worker served assets
+cache-first on the grounds that build assets carry a content hash and so cannot
+go stale. True of the bundle, which Vite renames every build. False for
+everything in `public/`, which is copied through verbatim —
+`assets/audio/rcs.mp3` keeps that name forever, so every replacement of that
+file changed nothing for anyone who had already loaded it once. It refreshed in
+the background and was heard on the *next* visit, which is why three successive
+thruster sounds were each reported as unchanged while the deployed file was
+right every time. It also cost me a false measurement earlier in the same way.
+
+The worker now serves nothing from the cache while there is a network; the cache
+is only what lets the installed app open without one. And `AUDIO_VERSION` is
+appended to every audio URL, so a stale entry cannot match even in a client
+whose worker has not updated yet — the fix lands on the next load rather than
+the one after.

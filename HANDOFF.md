@@ -149,6 +149,25 @@ now been the cause of two separate bugs (the ambient floor, then Earth's city
 lights): an absolute term survives the 1/1500 sunlight at Pluto unchanged and
 is then multiplied by an adaptive exposure opening 480x to compensate.
 
+## The service worker has been wrong twice; do not make it clever
+
+It exists to make the browser offer to install the page, and for nothing else.
+It serves *nothing* from the cache while there is a network. Two earlier
+versions each cost several rounds of chasing a ghost:
+
+1. Caching the document meant an installed copy kept starting the build it was
+   installed with.
+2. Serving assets cache-first "because build assets are content-hashed" is
+   false for anything in `public/`, which Vite copies through verbatim.
+   `assets/audio/rcs.mp3` keeps that name forever, so replacing the file did
+   nothing for anyone who had loaded it once — three different thruster sounds
+   were each reported as unchanged, and each time the file on the server was
+   correct and byte-identical to the local one.
+
+`AUDIO_VERSION` in `src/ui/audio.ts` is the belt to that braces: bump it when
+any audio file is replaced, so the URL changes and a stale entry cannot match
+even in a client whose worker has not updated yet.
+
 ## Things that are settled and should not be re-litigated
 
 - Planet positions are validated against 48 JPL Horizons vectors; do not "fix"
