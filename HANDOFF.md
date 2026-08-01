@@ -168,6 +168,20 @@ versions each cost several rounds of chasing a ghost:
 any audio file is replaced, so the URL changes and a stale entry cannot match
 even in a client whose worker has not updated yet.
 
+## Every Web Audio node must be released
+
+`src/ui/audio.ts` creates nodes per sound and every one of them now has an
+`onended` that disconnects it and its chain. Without that the graph grows for
+as long as the page runs — the proximity swell alone fires every twenty-five
+seconds near a planet — and the audio thread ends up carrying every sound ever
+played. That was a reported stutter, and "worse near planets" was the clue.
+
+Nothing that has to happen on time may hang on `setTimeout`. The ambient beds
+did, and a stalled main thread runs the timer late while the outgoing bed stops
+at its own end regardless, which is a silence as long as the stall. Timing is
+taken from `ctx.currentTime` in the per-frame update instead, with the next bed
+brought up a whole fade early.
+
 ## Things that are settled and should not be re-litigated
 
 - Planet positions are validated against 48 JPL Horizons vectors; do not "fix"

@@ -967,3 +967,36 @@ reach. At an irradiance of 7 it was not — measured, the disc came out at a mea
 of 218 from three solar radii with nothing clipped at all, which is a bright
 lamp rather than something you cannot look at. At 60 the same view means 251
 with a fifth of it clipped, and the centre saturates at every distance.
+
+### Twenty-eighth round — the audio graph was never swept up
+
+Reported: the sound stutters and sometimes cuts out entirely, recovers after
+about a minute, and it seems worse near planets.
+
+Four faults, and the "near planets" was the clue that found the first.
+
+**Nothing was ever disconnected.** Measured on the shipped file: seven sounds
+created per-play nodes, and there were *zero* `disconnect` calls in the whole
+module. Every one-shot stayed wired to the master gain for the life of the
+page. Near a planet the proximity swell fires every twenty-five seconds and the
+radio every couple of minutes, so that is exactly where the graph grew fastest
+and the audio thread had the most to carry. Every node now has an `onended`
+that releases it and its chain — verified: 80 created, 80 live, **0 live once
+they end**.
+
+**The ambient beds hung on `setTimeout`.** A timer is the wrong thing to hang
+music on. A stalled main thread runs it late while the outgoing bed stops at
+its own end regardless, and the gap is as long as the stall — which is the
+"cuts out entirely and comes back" exactly. Timing now comes from
+`ctx.currentTime`, checked in the per-frame update, with the next bed brought
+up a whole eight-second fade before the current one ends.
+
+**A suspended context was never resumed.** Browsers suspend audio under load or
+on focus loss and nothing brings it back by itself.
+
+Honest limit: the stutter cannot be reproduced here. This environment renders
+into a 2x2 canvas, so frame times measure 0.2-0.3 ms near Jupiter and say
+nothing about a real GPU under an 8k texture at maximum anisotropy. These are
+the causes that could be found and proved; if it persists, the remaining
+suspect is render load starving the audio thread, and that needs a machine that
+is actually drawing the thing.

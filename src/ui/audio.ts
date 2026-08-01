@@ -99,6 +99,7 @@ export class Ambience {
   private rcsGain: GainNode | null = null;
   private rcsSource: AudioBufferSourceNode | null = null;
   private lastBed: Clip | null = null;
+  private bedDueAt = Infinity;
 
   muted = false;
   /** True once the browser has let us make a sound. */
@@ -177,13 +178,18 @@ export class Ambience {
     gain.gain.setValueAtTime(LEVEL[pick], now + buffer.duration - FADE);
     gain.gain.linearRampToValueAtTime(0, now + buffer.duration);
     source.connect(gain).connect(this.master);
+    source.onended = () => { source.disconnect(); gain.disconnect(); };
     source.start(now);
     source.stop(now + buffer.duration + 0.1);
 
-    // Bring the next one in while this one is still going out, so the two
-    // overlap rather than meet.
-    window.setTimeout(
-      () => this.startBed(), Math.max(1000, (buffer.duration - FADE) * 1000));
+    // When the next one is due, on the audio clock. This used to be a
+    // setTimeout, and a timer is the wrong thing to hang music on: a stalled
+    // main thread runs it late, the outgoing bed has already stopped at its
+    // own end, and the result is a silence lasting however long the stall did.
+    // Checked against ctx.currentTime in update() instead, and the next bed is
+    // brought up a whole fade before this one runs out, so there is eight
+    // seconds of slack before a gap is even possible.
+    this.bedDueAt = now + buffer.duration - FADE;
   }
 
   private loop(name: Clip, level = LEVEL[name]): void {
@@ -261,6 +267,9 @@ export class Ambience {
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
       gain.gain.linearRampToValueAtTime(LEVEL.rcs, this.ctx.currentTime + 0.05);
       source.connect(body).connect(muffle).connect(gain).connect(this.master);
+      source.onended = () => {
+        for (const n of [source, body, muffle, gain]) n.disconnect();
+      };
       source.start(this.ctx.currentTime, 0.4 + Math.random() * (source.loopEnd - 0.5));
       this.rcsSource = source;
       this.rcsGain = gain;
@@ -286,6 +295,15 @@ export class Ambience {
    */
   update(thrust: number, dt: number, nearness = 0): void {
     if (!this.ctx || !this.master) return;
+
+    // A browser may suspend the context under load or when the page loses
+    // focus, and nothing brings it back on its own.
+    if (this.ctx.state === 'suspended') void this.ctx.resume();
+
+    if (this.ctx.currentTime >= this.bedDueAt) {
+      this.bedDueAt = Infinity;
+      this.startBed();
+    }
     const drive = this.gains.get('drive');
     if (drive) {
       const target = this.muted ? 0 : LEVEL.drive * Math.min(1, Math.max(0, thrust));
@@ -343,6 +361,7 @@ export class Ambience {
       gain.gain.setValueAtTime(0.5, at + 0.24);
       gain.gain.linearRampToValueAtTime(0, at + 0.25);
       osc.connect(gain).connect(bus);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
       osc.start(at);
       osc.stop(at + 0.3);
     };
@@ -412,6 +431,9 @@ export class Ambience {
       level.gain.value = LEVEL[pick];
       voice.connect(high).connect(low).connect(peak).connect(drive)
         .connect(limiter).connect(shaper).connect(post).connect(level).connect(bus);
+      voice.onended = () => {
+        for (const n of [voice, high, low, peak, drive, limiter, shaper, post, level]) n.disconnect();
+      };
       voice.start(t0 + 0.3);
     }
 
@@ -429,9 +451,23 @@ export class Ambience {
     const level = this.ctx.createGain();
     level.gain.value = 0.22;
     noise.connect(band).connect(level).connect(bus);
+    noise.onended = () => {
+      for (const n of [noise, band, level]) n.disconnect();
+      bus.disconnect();
+    };
     noise.start(t0 + 0.25);
   }
 
+  /**
+   * Play once and then let go of it.
+   *
+   * The `onended` is not housekeeping, it is the fix for a reported fault: the
+   * one-shots were created, connected to the master and never disconnected, so
+   * the graph grew for as long as the page ran. Near a planet the proximity
+   * swell fires every twenty-five seconds and the radio every couple of
+   * minutes, which is why the stuttering was worse there — the audio thread
+   * was carrying every sound that had ever been played.
+   */
   private oneShot(name: Clip, level = LEVEL[name]): void {
     const buffer = this.buffers.get(name);
     if (!buffer || !this.ctx || !this.master || this.muted) return;
@@ -440,6 +476,7 @@ export class Ambience {
     const gain = this.ctx.createGain();
     gain.gain.value = level;
     source.connect(gain).connect(this.master);
+    source.onended = () => { source.disconnect(); gain.disconnect(); };
     source.start();
   }
 
