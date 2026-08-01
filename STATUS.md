@@ -883,3 +883,31 @@ the ship will hold about 105 km/s at 400 km where it used to manage 59.
 
 The scenario's warning-time assertion moved from 4 s to 2 s to match. That is a
 loosened promise, not a corrected test.
+
+### Twenty-fifth round — two controls on one axis
+
+Reported: up/down is not inverted, and it will not go down at all — something
+pushes up.
+
+Both are one fault, and it explains a claim from the round before as well. The
+arrow keys were driving the ship's attitude through *two* paths at once:
+
+- `main.ts` aims the ship directly through the torque model — inverted, gentle,
+  building over seconds;
+- `input.command.pitch` still went on to `world.command`, and from there to
+  `Ship.updateAttitude` — not inverted, immediate.
+
+Held briefly, the immediate path wins and nothing looks inverted. Held longer,
+the torque path builds against it and the axis stalls or reverses, which is
+exactly "it will not go down, something pushes up". Two opposed controls on one
+axis feel like nothing else.
+
+It also silently undid the roll inertia added a round earlier: Q and E were
+going through the same duplicate, so the instant path was still there under the
+new one.
+
+Attitude now has one owner. In PILOT the block that aims the ship owns it and
+the command fields are zeroed; ORBITAL, where nothing calls `aim`, keeps them.
+Measured through the real frame path: ArrowUp turns the nose **down** 13.1
+degrees in four seconds, ArrowDown turns it **up** by the same, symmetric to
+two decimal places.

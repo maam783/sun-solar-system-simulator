@@ -317,9 +317,17 @@ const frame = (now: number): void => {
   world.command.rcsX = command.rcsX;
   world.command.rcsY = command.rcsY;
   world.command.rcsZ = command.rcsZ;
-  world.command.pitch = command.pitch;
-  world.command.yaw = command.yaw;
-  world.command.roll = command.roll;
+  // Attitude has exactly one owner, and in PILOT it is the block above, which
+  // aims the ship directly through a torque model. Passing the same keys on
+  // here as well drove every axis twice — the old path instantly and without
+  // the inversion, the new one gently and with it, the two fighting each other.
+  // It presented as "up/down is not inverted and something is pushing up",
+  // which is precisely what two opposed controls on one axis feel like, and it
+  // silently undid the roll inertia added a round earlier.
+  const manual = world.flightModel !== 'pilot';
+  world.command.pitch = manual ? command.pitch : 0;
+  world.command.yaw = manual ? command.yaw : 0;
+  world.command.roll = manual ? command.roll : 0;
 
   world.step(step);
 
