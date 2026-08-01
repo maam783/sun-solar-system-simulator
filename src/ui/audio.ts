@@ -58,12 +58,10 @@ const LEVEL: Record<Clip, number> = {
   // off; this is 6 dB down from that.
   hum: 0.05,
   drive: 0.40,
-  // Held, not pulsed, so it is running whenever a key is down. This is makeup
-  // gain as much as level: most of the sample's energy is above 3.2 kHz, so
-  // muffling it costs 19.5 dB, and putting that back is what lands the result
-  // at about -32 dBFS played — level with the hull hum, and eight decibels
-  // under the harsh version that started all of this.
-  rcs: 2.8,
+  // A hint and nothing more. The band above does most of the work; this puts
+  // what survives it a good ten decibels under the hull hum, so it registers
+  // as something happening rather than as a sound being played.
+  rcs: 3.4,
   warp: 0.45,
   rumble: 0.50,
   // Measured against the old chain rather than guessed: limiting the speech
@@ -245,18 +243,24 @@ export class Ambience {
       source.loopStart = 0.4;
       source.loopEnd = Math.max(0.5, buffer.duration - 0.4);
       // Start somewhere random, so repeated taps are not the same sound twice.
-      // The raw sample is broadband to 11 kHz, which is a sharp tsss rather
-      // than the soft shhh of gas heard through a hull — and sharpness is what
-      // "too hissy" actually meant. Rolling it off at 3.2 kHz is the wall
-      // between the nozzle and the ear.
+      // Narrow, not just quiet. At 3.2 kHz this still had the full body of a
+      // rushing sound and was described, fairly, as a running tap. What is
+      // wanted is the suggestion of gas somewhere behind a wall, so the band is
+      // squeezed hard from both ends: nothing below 380 Hz, where the weight
+      // and the plumbing live, and nothing above 1.3 kHz, where the rush is.
+      // What is left is air, and only just.
+      const body = this.ctx.createBiquadFilter();
+      body.type = 'highpass';
+      body.frequency.value = 380;
+      body.Q.value = 0.7;
       const muffle = this.ctx.createBiquadFilter();
       muffle.type = 'lowpass';
-      muffle.frequency.value = 3200;
+      muffle.frequency.value = 1300;
       muffle.Q.value = 0.7;
       const gain = this.ctx.createGain();
       gain.gain.setValueAtTime(0, this.ctx.currentTime);
       gain.gain.linearRampToValueAtTime(LEVEL.rcs, this.ctx.currentTime + 0.05);
-      source.connect(muffle).connect(gain).connect(this.master);
+      source.connect(body).connect(muffle).connect(gain).connect(this.master);
       source.start(this.ctx.currentTime, 0.4 + Math.random() * (source.loopEnd - 0.5));
       this.rcsSource = source;
       this.rcsGain = gain;

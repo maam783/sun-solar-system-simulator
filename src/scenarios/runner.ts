@@ -670,7 +670,14 @@ const pilotMode: Scenario = {
     results.below('station_drift_m',
       Math.abs((memory.holdAlt ?? 0) - 400_000), 50);
     // Diving at a planet at full throttle still leaves time to react.
-    results.above('warning_seconds', memory.minImpact ?? 0, 4);
+    //
+    // Four seconds was this assertion for as long as the clearance rule was
+    // eight seconds. The rule is five now, deliberately, because eight was
+    // twice as cautious as the drive needs and made flying near anything feel
+    // like wading. This is a loosened promise, not a corrected test, and it
+    // should be read that way. It measures 3.1 s, and the arrival that used to
+    // be 125 m/s is now 82.
+    results.above('warning_seconds', memory.minImpact ?? 0, 2);
     // And the crew is never asked for more than the drive's rated load.
     results.below('peak_g', memory.peakG ?? 0, PilotDrive.maxAccel / G0 + 1);
     // The property that makes PILOT forgiving: three minutes of holding the

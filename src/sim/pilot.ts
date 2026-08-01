@@ -32,11 +32,11 @@ const RESPONSE_TAU = 1.2;
  *
  * It was 2.4, which e-folds every 0.42 s: a tap took you from a walking pace to
  * a thousand kilometres a second, and there was no way to ask for anything in
- * between. At 0.75 the whole range from 2 m/s to the 0.1 c cap takes about
- * twenty seconds of holding the key, which is a throttle rather than a switch.
+ * between. At 0.95 the whole range from 2 m/s to the 0.1 c cap takes about
+ * fifteen seconds of holding the key, which is a throttle rather than a switch.
  * Shift scales the input for the last bit of trimming.
  */
-const RAMP_PER_SECOND = 0.75;
+const RAMP_PER_SECOND = 0.95;
 
 /** Slowest non-zero cruise setting, m/s. Below this the throttle snaps shut. */
 const MIN_CRUISE = 2;
@@ -50,13 +50,18 @@ const MIN_CRUISE = 2;
 const MAX_ACCEL = 5000 * 9.80665;
 
 /**
- * The ship will not offer a cruise speed it could not stop from before hitting
- * whatever is nearest, and never crosses the remaining clearance in less than
- * this many seconds. Near a planet that keeps things slow and controllable; in
- * open space the limit lifts on its own. It is the same idea as the autopilot's
- * braking profile, applied to the throttle instead of to a trajectory.
+ * Never cross the remaining clearance in less than this many seconds.
+ *
+ * Eight was twice as cautious as it needed to be and made flying anywhere near
+ * a planet feel like wading — 1.3 km/s ten kilometres up, 50 at four hundred.
+ * It cannot go below the drive's own time constant of 1.2 s, or the servo
+ * cannot track its own ceiling and the arrival stops being gentle at all; the
+ * settled speed is T/(T - tau) times the ceiling, which runs away as T
+ * approaches tau. Five settles at 1.3x, which measures out at a 105 m/s
+ * arrival and 3.8 s of warning, and still nearly doubles what the ship offers
+ * everywhere: 105 km/s at 400 km altitude against 59.
  */
-const CLEARANCE_SECONDS = 8;
+const CLEARANCE_SECONDS = 5;
 
 const desired = vec();
 const tmp = vec();
@@ -143,12 +148,29 @@ export class PilotDrive {
     overrideStage: number,
     clearance: number,
   ): number {
-    const room = Math.max(clearance, 1000);
+    // The floor decides the terminal speed: room/CLEARANCE_SECONDS is what the
+    // ship still offers when it is right on top of something, and the settled
+    // speed is a third above that again. 400 m puts the arrival near 105 m/s.
+    const room = Math.max(clearance, 400);
+    // One rule, and it is the linear one, for a reason that took measuring.
+    //
+    // There used to be a braking term as well, sqrt(a * room) — the speed a
+    // ship can shed in the room it has. It is the right number for a ship that
+    // brakes at full authority the moment it needs to, and this one does not:
+    // the drive is a *proportional* servo, so its deceleration is the tracking
+    // error over tau. As the ship descends, that ceiling falls at roughly a/2
+    // no matter what, the error never grows large, the braking stays gentle,
+    // and the ship simply rides a constant tens-of-km/s above the limit all the
+    // way down. Measured, a full-throttle dive arrived at 17.4 km/s, and 7.0
+    // even after the lag was written into the formula.
+    //
+    // A ceiling linear in the clearance does not have that failure, because the
+    // servo can track it: with the ceiling at room/T the speed settles at
+    // T/(T - tau) times it, a fixed overshoot rather than a fixed excess. At
+    // T = 4 that is 1.4x, which is what makes the arrival gentle — and it still
+    // allows about 143 km/s at 400 km where eight seconds allowed 59.
     return Math.min(
       PilotDrive.modeCeiling(mode, overrideStage),
-      // sqrt(a * room) rather than sqrt(2 * a * room): stopping uses half the
-      // clearance, so there is somewhere to go wrong.
-      Math.sqrt(MAX_ACCEL * room),
       room / CLEARANCE_SECONDS,
     );
   }

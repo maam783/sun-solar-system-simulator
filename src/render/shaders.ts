@@ -61,6 +61,7 @@ export const PLANET_FRAG = /* glsl */ `
   uniform bool uIsStar;
   uniform float uSeed;
   uniform float uRoughnessDetail;
+  uniform float uDetail;
 
   varying vec3 vNormalW;
   varying vec3 vPosW;
@@ -115,6 +116,23 @@ export const PLANET_FRAG = /* glsl */ `
         float detail = fbm(q * 9.0);
         albedo = uBaseColor * (0.72 + 0.5 * craters + 0.18 * detail * uRoughnessDetail);
       }
+    }
+
+    // Grain, once the map is being magnified past its own resolution.
+    //
+    // 8192 across is 4.9 km per pixel on Earth, and from a 400 km orbit the eye
+    // is asking for about 170 m. No single map can answer that — 40,000 pixels
+    // across would, and no browser will hold it — so past 1:1 the surface is an
+    // interpolation, and interpolation is smooth in a way nothing real is. That
+    // smoothness is the tell: it reads as a photograph being enlarged.
+    //
+    // This does not invent terrain, and it is not pretending to. It breaks the
+    // interpolation up with fine variation in the albedo, tied to the body's
+    // own frame so it sits still rather than swimming, and it fades in only as
+    // far as the magnification calls for it.
+    if (uDetail > 0.0) {
+      float grain = fbm(n * 640.0 + uSeed) - 0.5;
+      albedo *= 1.0 + grain * 0.22 * uDetail;
     }
 
     vec3 toSun = normalize(uSunPos - vPosW);

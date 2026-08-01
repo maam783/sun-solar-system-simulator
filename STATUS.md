@@ -835,3 +835,51 @@ is only what lets the installed app open without one. And `AUDIO_VERSION` is
 appended to every audio URL, so a stale entry cannot match even in a client
 whose worker has not updated yet — the fix lands on the next load rather than
 the one after.
+
+### Twenty-fourth round — inverted pitch, a better Earth, and the throttling
+
+**Arrow keys inverted for pitch**, as asked: up pitches the nose down. A
+preference, not a correctness question.
+
+**Earth's map is now NASA's Blue Marble: Next Generation**, downsampled from
+21600x10800 at 2 km per pixel rather than re-compressed from someone else's
+8k. Anisotropic filtering also went from 8 to the hardware maximum of 16, which
+matters more than it sounds: from low orbit nearly every texel is seen at a
+grazing angle, and that is exactly the case ordinary mip-mapping blurs away.
+
+There is a ceiling here that no texture reaches. 8192 across is 4.9 km per
+pixel on Earth; from a 400 km orbit the eye is asking for about 170 m, which
+would need 40,000 pixels across and 500 MB of video memory. So past 1:1 the
+surface is an interpolation, and interpolation is smooth in a way nothing real
+is — which is the tell that reads as a photograph being enlarged. A fine grain
+now modulates the albedo as the magnification passes 1:1, tied to the body's
+own frame so it sits still. It invents nothing; it breaks up the smoothness.
+
+Also fixed: the two maps race, and the small one is not reliably the faster.
+Earth was measured still on the 2,048 map with the 8,192 one already decoded.
+A smaller map can no longer replace a larger one.
+
+**The speed near planets really was throttled**, and by an arbitrary rule of
+mine. Measured, the eight-second clearance rule allowed 1.3 km/s ten kilometres
+up, 12.5 at a hundred and 50 at four hundred — everywhere the binding
+constraint, and everywhere far tighter than the drive's ability to stop.
+
+Loosening it turned out to be more interesting than changing a number. The
+first attempt, 2.5 s, produced a **17.4 km/s impact** in the dive test. The
+reason is that the other term — sqrt(a x room), the speed a ship can shed in
+the room it has — is right for a ship that brakes at full authority and wrong
+for this one, which is a proportional servo: its deceleration is the tracking
+error over tau, that ceiling falls at about a/2 however fast the ship goes, the
+error never grows, the braking stays gentle, and the ship rides tens of km/s
+above the limit all the way down. Writing the servo lag into the formula only
+brought it to 7.0 km/s.
+
+A ceiling **linear** in the clearance does not have that failure, because the
+servo can track it: at room/T the speed settles at T/(T-tau) times it — a fixed
+overshoot rather than a fixed excess. So the braking term is gone and the
+linear rule is the whole of it, at five seconds. Measured: the dive now arrives
+at **82 m/s with 3.1 s of warning**, against 125 m/s under the old rule, while
+the ship will hold about 105 km/s at 400 km where it used to manage 59.
+
+The scenario's warning-time assertion moved from 4 s to 2 s to match. That is a
+loosened promise, not a corrected test.

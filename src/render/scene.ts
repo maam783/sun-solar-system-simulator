@@ -187,6 +187,8 @@ export class SolarSystemRenderer {
           uIsStar: { value: isStar },
           uSeed: { value: (def.id.charCodeAt(0) * 7.31) % 100 },
           uRoughnessDetail: { value: def.kind === 'moon' ? 1.4 : 1.0 },
+          uDetail: { value: 0 },
+          uMapWidth: { value: 2048 },
           uTime: { value: 0 },
         },
       });
@@ -362,7 +364,11 @@ export class SolarSystemRenderer {
         `${basePath}/${file}`,
         (texture) => {
           texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+          // Anisotropic filtering, at whatever the hardware allows. From low orbit
+          // nearly every texel is seen at a grazing angle, which is precisely the
+          // case ordinary mip-mapping blurs into mush; this is the difference
+          // between a surface and a smear, and it costs almost nothing.
+          texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
           onDone(texture);
           this.texturesLoaded++;
         },
@@ -374,11 +380,21 @@ export class SolarSystemRenderer {
       );
     };
 
+    // Whichever finishes first wins, unless the loser is bigger. The two
+    // requests race, and the small map is not reliably the faster of them — it
+    // arrived second often enough to leave Earth on the 2,048 map with the
+    // 8,192 one already decoded and discarded.
+    const applyMap = (view: BodyView, texture: THREE.Texture): void => {
+      const width = texture.image?.width ?? 0;
+      if (width < (view.material.uniforms.uMapWidth!.value as number) &&
+          view.material.uniforms.uHasMap!.value) return;
+      view.material.uniforms.uMap!.value = texture;
+      view.material.uniforms.uHasMap!.value = true;
+      view.material.uniforms.uMapWidth!.value = width || 2048;
+    };
+
     for (const view of this.views.values()) {
-      load(`${view.def.id}.jpg`, (texture) => {
-        view.material.uniforms.uMap!.value = texture;
-        view.material.uniforms.uHasMap!.value = true;
-      });
+      load(`${view.def.id}.jpg`, (texture) => applyMap(view, texture));
     }
 
     // A second, much larger map for the bodies you actually get close to.
@@ -395,10 +411,7 @@ export class SolarSystemRenderer {
     for (const id of ['moon', 'earth', 'mars', 'jupiter']) {
       const view = this.views.get(id);
       if (!view) continue;
-      load(`${id}_hi.jpg`, (texture) => {
-        view.material.uniforms.uMap!.value = texture;
-        view.material.uniforms.uHasMap!.value = true;
-      });
+      load(`${id}_hi.jpg`, (texture) => applyMap(view, texture));
     }
 
     load('earth_night.jpg', (texture) => {
@@ -607,6 +620,10 @@ export class SolarSystemRenderer {
       u.uSunPos!.value.copy(sunVector);
       u.uCameraPosW!.value.set(0, 0, 0);
       u.uIrradiance!.value = irradiance;
+      // Half the map spans the visible hemisphere, so this is roughly screen
+      // pixels per texel. Past one, the map is being enlarged.
+      const texels = Math.max(1, (u.uMapWidth?.value as number ?? 2048) / 2);
+      u.uDetail!.value = Math.max(0, Math.min(1, (pixels / texels - 0.6) * 1.2));
       if (u.uTime) u.uTime.value = world.clock.elapsed * 0.001;
 
       if (view.atmosphere) {

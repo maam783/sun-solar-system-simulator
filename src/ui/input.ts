@@ -250,7 +250,10 @@ export class InputController {
     const held = (code: string) => (this.keys.has(code) ? 1 : 0);
     const fine = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 0.25 : 1;
     return {
-      pitch: (held('ArrowUp') - held('ArrowDown')) * fine,
+      // Inverted, as asked: up pitches the nose down. This is the flight-stick
+      // convention rather than the camera one, and it is a preference, not a
+      // correctness question — pull back to climb.
+      pitch: (held('ArrowDown') - held('ArrowUp')) * fine,
       yaw: (held('ArrowLeft') - held('ArrowRight')) * fine,
     };
   }

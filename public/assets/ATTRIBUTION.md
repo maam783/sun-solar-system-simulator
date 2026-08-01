@@ -26,3 +26,7 @@ with band-limited noise standing in for the open circuit. NASA's Apollo
 air-to-ground tapes are public domain and could have been used instead; the
 voices were left out on purpose, because a recognisable quotation from one
 mission to the Moon works against a view of Saturn rather than for it.
+
+`textures/earth_hi.jpg` is downsampled from NASA's Blue Marble: Next Generation
+(August 2004, topography and bathymetry), 21600x10800 at 2 km per pixel. NASA
+imagery is in the public domain.
