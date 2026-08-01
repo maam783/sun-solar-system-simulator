@@ -911,3 +911,23 @@ the command fields are zeroed; ORBITAL, where nothing calls `aim`, keeps them.
 Measured through the real frame path: ArrowUp turns the nose **down** 13.1
 degrees in four seconds, ArrowDown turns it **up** by the same, symmetric to
 two decimal places.
+
+### Twenty-sixth round — a way back to forward
+
+Asked for: something that returns the view to dead ahead, because once you have
+looked away there is nothing to say where the ship is pointing.
+
+**C**, and a button in the sights panel, which is the only thing on screen.
+
+It swings rather than cuts, over about 1.5 s, and that is the whole design. A
+cut would leave you facing forward without ever having seen yourself turn,
+which answers where forward *is* but not the question actually being asked,
+which is where it *was* relative to where you were looking. Watching the view
+come round answers both. Measured from 51 degrees of pitch and 160 of yaw:
+152 -> 70 -> 32 -> 15 -> 6.7 -> 3.1 degrees, settled by 1.5 s.
+
+Taking hold of the mouse cancels a swing in progress — measured, it stops where
+it was rather than continuing — so changing your mind never costs you the view.
+
+The attitude-hold cycle moved from C to X to make room. It is a full-console
+control and the markers it drives are not drawn in the simple view anyway.

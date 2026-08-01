@@ -69,6 +69,7 @@ export class InputController {
   /** Set by a click: turn the ship to face where the head is. */
   aimRequested = false;
   private dragging = false;
+  private centring = false;
   private dragMoved = 0;
 
   constructor(
@@ -106,6 +107,7 @@ export class InputController {
         case 'KeyH': this.actions.toggleHelp(); break;
         case 'KeyF': this.actions.toggleFullscreen(); break;
         case 'KeyM': this.actions.toggleMute(); break;
+        case 'KeyC': this.centreHead(); break;
         // The whole instrument console, for anyone who wants it, on the key it
         // lives on in every other program that has one.
         case 'Backquote': this.actions.toggleConsole(); break;
@@ -115,7 +117,7 @@ export class InputController {
         case 'KeyP': this.actions.togglePause(); break;
         case 'KeyR': this.keys.delete(code); this.actions.respawn(); break;
         case 'KeyV': this.actions.pointAtTarget(); break;
-        case 'KeyC': this.actions.cycleHold(); break;
+        case 'KeyX': this.actions.cycleHold(); break;
         case 'KeyZ': this.throttleLock = !this.throttleLock; break;
         case 'Digit1': this.actions.setAccelPreset(0); break;
         case 'Digit2': this.actions.setAccelPreset(1); break;
@@ -158,6 +160,8 @@ export class InputController {
 
     this.canvas.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
+      // Taking hold of the view cancels any swing in progress.
+      this.centring = false;
       this.dragging = true;
       this.dragMoved = 0;
       this.canvas.style.cursor = 'grabbing';
@@ -197,6 +201,7 @@ export class InputController {
   /** Refresh the command struct. Called once per rendered frame. */
   update(dt: number): ShipCommand {
     const held = (code: string) => (this.keys.has(code) ? 1 : 0);
+    this.easeCentre(dt);
 
     const forward = held('KeyW') - held('KeyS');
     this.command.throttle = this.throttleLock ? 1 : Math.max(0, forward);
@@ -258,10 +263,40 @@ export class InputController {
     };
   }
 
-  /** Face front again. */
+  /**
+   * Swing the view back to dead ahead.
+   *
+   * Eased rather than snapped, and the easing is the point: once you have
+   * looked away there is nothing in an empty sky to say which way the ship is
+   * pointing, and a cut leaves you facing forward without ever having seen
+   * yourself turn. Watching the view come round tells you where forward *was*,
+   * which is the question being asked.
+   */
+  centreHead(): void {
+    this.centring = true;
+  }
+
+  /** Face front at once, with no swing. For handing over to a flypast. */
   recentreHead(): void {
+    this.centring = false;
     this.headPitch = 0;
     this.headYaw = 0;
+  }
+
+  private easeCentre(dt: number): void {
+    if (!this.centring) return;
+    // Shortest way round: after a full turn the yaw may be just under +pi when
+    // the way home is a hair further forwards.
+    if (this.headYaw > Math.PI) this.headYaw -= 2 * Math.PI;
+    if (this.headYaw < -Math.PI) this.headYaw += 2 * Math.PI;
+    const k = 1 - Math.exp(-dt / 0.32);
+    this.headPitch -= this.headPitch * k;
+    this.headYaw -= this.headYaw * k;
+    if (Math.abs(this.headPitch) < 0.002 && Math.abs(this.headYaw) < 0.002) {
+      this.headPitch = 0;
+      this.headYaw = 0;
+      this.centring = false;
+    }
   }
 
   /** Consume a click-to-aim request. */

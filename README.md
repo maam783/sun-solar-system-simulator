@@ -197,6 +197,7 @@ comma-separated list.
 | **W / S** | **Faster / slower** |
 | **Space** | **All stop** |
 | **Esc** | **Take back control from a flypast** |
+| **C** | **Look forward again** |
 | **F** | **Fullscreen** |
 | **M** | Mute |
 | ` | The full instrument console |
@@ -208,7 +209,7 @@ comma-separated list.
 | Tab / T | Cycle target |
 | N | Engage / abort autopilot |
 | 1 2 3 | Autopilot at 1 g / 3 g / 10 g |
-| C | Cycle attitude hold (prograde, retrograde, target, nadir) |
+| X | Cycle attitude hold (prograde, retrograde, target, nadir) |
 | V | Point at target |
 | O | Toggle the OVERRIDE drive |
 | [ / ] | Time warp down / up |

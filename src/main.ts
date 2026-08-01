@@ -82,6 +82,7 @@ const hud = new Hud({
     world.startFlyby(route);
   },
   onCancelFlyby: () => world.flyby.stop(),
+  onCentreView: () => input.centreHead(),
   onSetFlightModel: (model) => {
     world.flightModel = model;
     world.pilot.allStop();

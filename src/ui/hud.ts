@@ -86,6 +86,7 @@ export interface HudCallbacks {
   onToggleAssist: () => void;
   onStartFlyby: (routeId: string) => void;
   onCancelFlyby: () => void;
+  onCentreView: () => void;
   onSetFlightModel: (model: 'pilot' | 'orbital') => void;
   onAllStop: () => void;
   onFlyToTarget: () => void;
@@ -300,6 +301,12 @@ export class Hud {
     panel.appendChild(bar);
     this.fields.set('flybyFill', fill);
 
+    // Always available, above the cancel, because losing track of forward is
+    // something that happens while flying and not only during a flypast.
+    const centre = button('LOOK FORWARD  ·  C', () => this.callbacks.onCentreView());
+    centre.className = 'wide';
+    panel.appendChild(centre);
+
     const cancel = button('CANCEL', () => this.callbacks.onCancelFlyby());
     cancel.className = 'wide';
     panel.appendChild(cancel);
@@ -467,7 +474,7 @@ export class Hud {
         <div><kbd>W / S</kbd>Faster / slower</div>
         <div><kbd>Space</kbd>All stop</div>
         <div><kbd>Q / E</kbd>Roll</div>
-        <div><kbd>Q / E</kbd>Roll</div>
+        <div><kbd>C</kbd>Look forward again</div>
         <div><kbd>Tab / T</kbd>Cycle target</div>
         <div><kbd>A / D</kbd>Translate left / right</div>
         <div><kbd>R / F</kbd>Translate up / down</div>
@@ -475,7 +482,7 @@ export class Hud {
         <div><kbd>Z</kbd>Drive lock (ORBITAL)</div>
         <div><kbd>N</kbd>Engage / abort autopilot</div>
         <div><kbd>1 2 3</kbd>Autopilot 1g / 3g / 10g</div>
-        <div><kbd>C</kbd>Cycle attitude hold</div>
+        <div><kbd>X</kbd>Cycle attitude hold</div>
         <div><kbd>V</kbd>Point at target</div>
         <div><kbd>O</kbd>Toggle OVERRIDE drive</div>
         <div><kbd>[ / ]</kbd>Time warp down / up</div>
