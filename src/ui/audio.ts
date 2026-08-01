@@ -55,11 +55,12 @@ const LEVEL: Record<Clip, number> = {
   // off; this is 6 dB down from that.
   hum: 0.05,
   drive: 0.40,
-  // The replacement sample is a proper knock — peak 0.477 reached in 14 ms,
-  // crest factor 22.7 dB — where the one before it was a soft blub. It is also
-  // three and a half times hotter in the peak, so the gain comes down by the
-  // same amount rather than the pulse train arriving at half scale.
-  rcs: 0.85,
+  // Held, not pulsed, so it is running whenever a key is down. This is makeup
+  // gain as much as level: most of the sample's energy is above 3.2 kHz, so
+  // muffling it costs 19.5 dB, and putting that back is what lands the result
+  // at about -32 dBFS played — level with the hull hum, and eight decibels
+  // under the harsh version that started all of this.
+  rcs: 2.8,
   warp: 0.45,
   rumble: 0.50,
   // Measured against the old chain rather than guessed: limiting the speech
@@ -94,8 +95,8 @@ export class Ambience {
   private started = false;
   private nextBeacon = 0;
   private nextRumble = 0;
-  private rcsActive = false;
-  private nextPulse = 0;
+  private rcsGain: GainNode | null = null;
+  private rcsSource: AudioBufferSourceNode | null = null;
   private lastBed: Clip | null = null;
 
   muted = false;
@@ -202,26 +203,67 @@ export class Ambience {
   }
 
   /**
-   * Attitude thrusters, while the ship is being steered.
+   * Attitude thrusters: gas, hissing while the valve is open.
    *
-   * Pulses, not a loop. Two attempts got this wrong in opposite directions:
-   * the first fired a whole sample per key press and let it run on after the
-   * key was released, and the second looped the sample — but the loop window
-   * exists to skip MP3 padding on the two-minute beds, and applied to a
-   * one-second clip it played 0.05 s to 0.6 s of a file whose only sound is in
-   * the first third. That measured -60 dBFS, which is why the thrusters went
-   * silent.
+   * Three attempts, and the middle one was a wrong turn worth recording. From
+   * inside a hull a real thruster is not a jet at all — it is the valve and the
+   * pressure pulse arriving as structure-borne sound, which crews describe as a
+   * muffled hammer blow, and outside in vacuum there is nothing to hear at all.
+   * So a knock was defensible, and it was still wrong here: the standard this
+   * is built to is what someone who has never been to space expects, and what
+   * they expect is escaping gas. Accuracy that reads as a mistake is not
+   * accuracy worth having.
    *
-   * A cold-gas thruster does not hold anyway: it fires in pulses, and holding a
-   * valve open is not how attitude is trimmed. So this fires the puff about
-   * five times a second while a key is down, with enough jitter that it does
-   * not become a drum machine, and simply stops scheduling when the key comes
-   * up — the pulse already in flight finishes on its own, which is what a valve
-   * closing sounds like.
+   * The original complaint was that the hiss was too loud and too harsh, not
+   * that it was a hiss. So: soft, low, and quiet, held while a key is down and
+   * closing in 120 ms — which is the one part of the first attempt that was
+   * right, since a valve stops when it shuts and does not run on.
+   *
+   * The loop window is the bug that made this silent once already. It exists to
+   * skip MP3 padding on the two-minute beds; on a one-second clip it played the
+   * silence and nothing else. This sample is eight seconds of steady hiss, so
+   * trimming 0.4 s off each end takes padding and nothing more.
    */
   steering(active: boolean): void {
-    if (active && !this.rcsActive) this.nextPulse = 0;
-    this.rcsActive = active;
+    if (!this.ctx || !this.master) return;
+    if (active === !!this.rcsGain) return;
+
+    if (active) {
+      const buffer = this.buffers.get('rcs');
+      if (!buffer || this.muted) return;
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.loopStart = 0.4;
+      source.loopEnd = Math.max(0.5, buffer.duration - 0.4);
+      // Start somewhere random, so repeated taps are not the same sound twice.
+      // The raw sample is broadband to 11 kHz, which is a sharp tsss rather
+      // than the soft shhh of gas heard through a hull — and sharpness is what
+      // "too hissy" actually meant. Rolling it off at 3.2 kHz is the wall
+      // between the nozzle and the ear.
+      const muffle = this.ctx.createBiquadFilter();
+      muffle.type = 'lowpass';
+      muffle.frequency.value = 3200;
+      muffle.Q.value = 0.7;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(LEVEL.rcs, this.ctx.currentTime + 0.05);
+      source.connect(muffle).connect(gain).connect(this.master);
+      source.start(this.ctx.currentTime, 0.4 + Math.random() * (source.loopEnd - 0.5));
+      this.rcsSource = source;
+      this.rcsGain = gain;
+      return;
+    }
+
+    const gain = this.rcsGain!;
+    const source = this.rcsSource!;
+    const at = this.ctx.currentTime;
+    gain.gain.cancelScheduledValues(at);
+    gain.gain.setValueAtTime(gain.gain.value, at);
+    gain.gain.linearRampToValueAtTime(0, at + 0.12);
+    source.stop(at + 0.14);
+    this.rcsGain = null;
+    this.rcsSource = null;
   }
 
   /**
@@ -243,15 +285,6 @@ export class Ambience {
     this.master.gain.value = this.muted
       ? Math.max(0, this.master.gain.value - dt * 2)
       : this.master.gain.value;
-
-    if (this.rcsActive && this.ctx.currentTime > this.nextPulse) {
-      // Slower than the first attempt, which at four a second turned a soft
-      // sample into bubbling. Real attitude pulses are irregular and further
-      // apart than that; the wide jitter is what stops a train of identical
-      // transients reading as a machine.
-      this.nextPulse = this.ctx.currentTime + 0.26 + Math.random() * 0.26;
-      this.oneShot('rcs');
-    }
 
     // Close to something enormous.
     if (nearness > 0.35 && this.ctx.currentTime > this.nextRumble) {

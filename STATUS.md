@@ -761,3 +761,32 @@ over eight seconds, holds, and fades out while the next is already coming up,
 and the next is never the one just played. The four came out 3.5 dB apart
 (-14.5, -12.6, -15.2, -16.1 dBFS), which would have made every crossfade a
 step, so the gains equalise them to about -30 dBFS played whichever is up.
+
+### Twenty-first round — the thruster hisses again, correctly
+
+Asked, reasonably: a thruster should hiss, not knock. What was that?
+
+It was accuracy applied where accuracy was not the standard. From inside a hull
+a reaction control thruster is not a jet — it is the valve and the pressure
+pulse arriving through the structure, which crews describe as a muffled hammer
+blow, and outside in vacuum there is nothing to hear at all. The knock was
+defensible on those grounds and wrong on the grounds that actually govern this
+project: realism here was defined as *what someone who has never been to space
+expects*, and what they expect is escaping gas. Accuracy that reads as a
+mistake is not worth having. The original complaint was that the hiss was too
+loud and too harsh, not that it was a hiss; removing it was an over-correction.
+
+So it is gas again, held while a key is down, closing in 120 ms — which was the
+one part of the first attempt that was right, since a valve stops when it shuts.
+The sample is eight seconds of steady hiss, measured at 0.7 dB of variation
+across the whole file, so the loop cannot pump. Being eight seconds long also
+means the loop window that made this silent once — it trims 0.4 s off each end
+to skip MP3 padding, which on a one-second clip removed the only sound in it —
+now removes padding and nothing else. Playback starts at a random point, so
+repeated taps are not the same sound twice.
+
+"Too hissy" turned out to mean too *sharp*: the raw sample is broadband to
+11 kHz, which is a tsss rather than the shhh of gas through a wall. A 3.2 kHz
+low-pass fixes the character and costs 19.5 dB, so the gain is largely makeup.
+Measured through the whole chain: **-33 dBFS played, peak 0.12, no clipping**,
+against the hull hum at -30.8 and the harsh first version at -24.3.
