@@ -34,7 +34,7 @@ imagery is in the public domain.
 ## The sky
 
 `textures/milkyway.jpg` is ESO/S. Brunier's all-sky panorama (eso0932a),
-downsampled to 4096 across. Licensed CC BY 4.0; credit ESO/S. Brunier. It is a
+at its full 6000 across. Licensed CC BY 4.0; credit ESO/S. Brunier. It is a
 photograph rather than a model, in galactic coordinates, and the scene rotates
 it into the ecliptic — checked by looking: the brightest direction comes out at
 the galactic centre and the two galactic poles come out equally dark.

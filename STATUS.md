@@ -1147,3 +1147,52 @@ waypoint list, and the spline read one anyway; and framing was being counted
 against a route that does not make that promise, which dragged the figure to
 84% while looking like a failure of the passes. Journeys are now excluded from
 that count rather than excused within it: 99.8%.
+
+### Thirty-third round — the journey, corrected three ways
+
+**It halted at each body.** Holding the standoff exactly is a halt, and a
+journey that halts is a slideshow. Each stop is now an arc *around* the body,
+eased at both ends: 130 degrees at the Moon, **240 at Mars**, 150 on the way
+home. Measured over the whole tour the line of sight sweeps 345 degrees around
+Mars — it goes right round — with the disc reaching 52 degrees at 2.3 radii.
+
+**The camera turned away far too late.** It swung on a fixed fraction of the
+leg: back for the first third, forward after two thirds. The arithmetic says why
+that fails. Earth stops being a readable disc — eight pixels — 2.19% of the way
+along a leg to Mars, which the old speed profile reached at **15.2% of the
+leg's time**, and it is a bare dot by 24.7%. The swing was *starting* at 33%,
+nine points after there was anything left to watch.
+
+Two fixes. The swing now follows the apparent size of what is being left rather
+than the clock: it holds while that body is wider than six degrees and is done
+by two thirds of a degree, with a time limit finishing it by the middle of the
+leg so the short hop to the Moon does not spend itself looking backwards. And
+the departure is slower — a creep of 3% of full speed through the first quarter
+— which buys **23.4%** of the leg's time before Earth is down to eight pixels.
+
+That figure was found rather than guessed, and the first guess was wrong in the
+wrong direction: a creep of 0.16 gave 8.2%, *worse* than the cosine it replaced,
+because a constant sixth of full speed is faster off the mark than a curve that
+starts at nothing.
+
+**Mars arrived as a red blob and then jumped.** Two faults at one seam. The disc
+and the halo swapped at a single pixel count and they do not agree on size — a
+point source is sized by brightness, a disc by geometry — so a big soft blob was
+replaced by a smaller sharp planet. They overlap now: the mesh starts at 0.8 px
+and the halo is gone by 2.2, and the largest step in drawn size between
+neighbouring distances is **1.06x**.
+
+And the halo was enormous: capped at 64 px, which was an emergency stop put in
+for the Sun, while Mars's disc at that range was 1.7 px — thirty-eight times
+too big, which is the blob itself. It is tied to the disc now, 3.5x its size
+with a floor of 7 px. From 600 radii inward the drawn size tracks the true one
+within a few per cent, all the way to 296 px against 307.
+
+Found while measuring that: the halo kept its last visibility once the disc took
+over, because the branch that sets it stops running there — so a 142 px glare
+was still being drawn around a 76 px Mars, indefinitely.
+
+**The sky is at its source resolution**, 6000 across rather than 4096. That is
+3.6 arcmin per texel against 2.5 for a screen pixel at 45 degrees on 1080p, so
+it stays a little soft, and there is no fixing that from here: 6000 is what the
+photograph is.
