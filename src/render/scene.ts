@@ -683,12 +683,29 @@ export class SolarSystemRenderer {
     const pz = relPos.z;
 
     const pixels = apparentPixels(view.def.radius, distance, fovRad, viewportHeight);
+    // Disc and halo overlap rather than replacing one another.
+    //
+    // They used to swap at a single pixel count, and the two do not agree on
+    // size: a point source's sprite is sized by *brightness*, so approaching
+    // Mars it grows into a large soft red blob, and at the threshold it is
+    // replaced by the real disc — which is smaller, because that is Mars's
+    // actual angular size — and sharp. Reported, correctly, as the image
+    // jumping. Nothing was wrong with either half; they simply met.
+    //
+    // So the mesh starts well before the sprite ends, and the sprite fades out
+    // across the overlap. A bright planet close up then has a disc with a
+    // little glare around it, which is also what one looks like.
     const useMesh = pixels >= RENDER.impostorPixels;
+    const meshFade = Math.max(0, Math.min(1, (pixels - 0.8) / 1.4));
 
-    view.mesh.visible = useMesh;
+    view.mesh.visible = meshFade > 0;
+    // Off by default. The halo's branch below does not run once the disc has
+    // taken over, and without this the sprite kept whatever visibility and
+    // opacity it last had — measured, a 142 px glare still drawn around a
+    // 76 px Mars, for ever.
+    view.sprite.visible = false;
     if (view.atmosphere) view.atmosphere.visible = useMesh && pixels > 8;
     if (view.ring) view.ring.visible = useMesh && pixels > 4;
-    view.sprite.visible = !useMesh;
 
     // Sunlight falling on this body, normalised to Earth's 1361 W/m^2 so that
     // Pluto really does look dim and Mercury really does look harsh.
@@ -707,7 +724,7 @@ export class SolarSystemRenderer {
       ? 60
       : Math.min(6, solarIrradiance(len(state.pos)) / 1361);
 
-    if (useMesh) {
+    if (meshFade > 0) {
       view.mesh.position.set(px, py, pz);
       const scaleEq = view.def.radiusEq;
       const scalePol = view.def.radiusPol;
@@ -760,8 +777,10 @@ export class SolarSystemRenderer {
         ru.uPlanetPosW!.value.set(px, py, pz);
         ru.uIrradiance!.value = irradiance;
       }
-    } else {
-      // Too small to be a disc: draw it as a point of the brightness it really
+    }
+
+    if (meshFade < 1) {
+      // Still small enough to carry a halo: a point of the brightness it really
       // has, which is the only honest way to show a planet from across the
       // solar system.
       // The Sun never gets one. It has a mesh and it has a glare sprite sized
@@ -794,10 +813,18 @@ export class SolarSystemRenderer {
         // magnitude and magnitude has no floor — it was written with Venus at
         // -4 in mind and says 3,980x for the Sun at -19.
         size *= Math.sqrt(Math.pow(10, -0.4 * (magnitude - PHOTOMETRY.saturationMagnitude)));
-        size = Math.min(size, 64);
+        // Tied to the disc it stands for, not to a flat ceiling. Sixty-four
+        // pixels was an emergency stop put in for the Sun, and for a planet it
+        // is enormous: measured, Mars carried a 64 px halo while its disc was
+        // 1.7 px across, which is a soft red blob thirty-eight times too big
+        // and precisely what was reported. A spark far out, and proportionate
+        // once there is a disc to be proportionate to.
+        size = Math.min(size, Math.max(7, pixels * 3.5));
       }
       view.sprite.scale.set(size / viewportHeight * 2, size / viewportHeight * 2, 1);
-      view.spriteMaterial.opacity = Math.min(1, brightness * 1.6);
+      // Gone by the time the disc is properly a disc.
+      view.spriteMaterial.opacity = Math.min(1, brightness * 1.6) * (1 - meshFade);
+      view.sprite.visible = view.spriteMaterial.opacity > 0.004;
     }
   }
 

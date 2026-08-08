@@ -100,6 +100,16 @@ export interface TourLeg {
   approach: [number, number, number];
   /** Seconds spent alongside before the next leg starts. */
   linger: number;
+  /**
+   * Degrees swept around the body during the linger.
+   *
+   * A journey that halts at each stop is a slideshow. What is wanted at the far
+   * end of a round trip is a pass *round* the planet — the terminator coming
+   * over the limb, the surface turning underneath — and that is a question of
+   * how much of the sky the ship walks through while it is there, not of how
+   * long it waits.
+   */
+  arc?: number;
 }
 
 /**
@@ -158,6 +168,55 @@ function hyperbolaStops(opts: {
 }
 
 /**
+ * Fraction of a leg covered by fraction of its time.
+ *
+ * A raised cosine was the first attempt and it accelerates too hard off the
+ * mark: still only instantaneously, then away. What a departure needs is a
+ * stretch of genuinely slow movement, so the thing being left recedes at a rate
+ * the eye can follow, and the same on arrival.
+ *
+ * So: a low creep for the first and last seventh, full speed through the
+ * middle, cosine shoulders between. Integrated once here rather than solved,
+ * because the closed form is unpleasant and this is thirty-two lines of table.
+ */
+const TOUR_EASE: number[] = (() => {
+  const N = 256;
+  const speed = (u: number): number => {
+    // Three per cent of full speed for the first quarter, and the numbers were
+    // found rather than guessed. Earth stops being a readable disc — eight
+    // pixels — 2.19% of the way along a leg to Mars, so the question is how
+    // much of the leg's *time* that 2.19% buys. The raised cosine this replaced
+    // bought 15.2%. A creep of 0.16 bought 8.2%, which is worse, because a
+    // constant sixth of full speed is faster off the mark than a cosine that
+    // starts at nothing. At 0.03 it buys 23.4%, which on a forty-second leg is
+    // nine seconds of watching home recede.
+    const CREEP = 0.03;
+    const shoulder = (a: number, b: number, x: number): number => {
+      const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
+      return (1 - Math.cos(Math.PI * k)) / 2;
+    };
+    if (u < 0.24) return CREEP;
+    if (u < 0.46) return CREEP + (1 - CREEP) * shoulder(0.24, 0.46, u);
+    if (u < 0.54) return 1;
+    if (u < 0.76) return CREEP + (1 - CREEP) * (1 - shoulder(0.54, 0.76, u));
+    return CREEP;
+  };
+  const table = [0];
+  let acc = 0;
+  for (let i = 1; i <= N; i++) {
+    acc += (speed((i - 0.5) / N)) / N;
+    table.push(acc);
+  }
+  return table.map((v) => v / acc);
+})();
+
+const tourEase = (u: number): number => {
+  const x = Math.max(0, Math.min(1, u)) * (TOUR_EASE.length - 1);
+  const i = Math.min(TOUR_EASE.length - 2, Math.floor(x));
+  return TOUR_EASE[i]! + (TOUR_EASE[i + 1]! - TOUR_EASE[i]!) * (x - i);
+};
+
+/**
  * Waypoints along a circular orbit in the scenic XY plane, by angle from the
  * -X axis. Used where a shot wants a steady rate rather than an encounter.
  */
@@ -201,13 +260,15 @@ function circularStops(opts: {
  */
 const GRAND_TOUR: TourLeg[] = [
   // Away from Earth, out of the daylight side, with home filling the window.
-  { body: 'earth', radii: 2.4, seconds: 0, approach: [1, 0.35, 0.25], linger: 7 },
+  { body: 'earth', radii: 2.4, seconds: 0, approach: [1, 0.35, 0.25], linger: 8, arc: 45 },
   // The Moon: near enough that it is a place, and lit from the side.
-  { body: 'moon', radii: 3.2, seconds: 26, approach: [0.55, 0.8, 0.2], linger: 9 },
+  { body: 'moon', radii: 3.2, seconds: 26, approach: [0.55, 0.8, 0.2], linger: 14, arc: 130 },
   // The long one. Tens of millions of kilometres of nothing, in half a minute.
-  { body: 'mars', radii: 3.6, seconds: 40, approach: [0.75, 0.6, 0.28], linger: 12 },
+  // The far end of the round trip, and the reason for it: right round the
+  // planet, from the night side into the light.
+  { body: 'mars', radii: 2.3, seconds: 40, approach: [-0.55, 0.75, 0.25], linger: 30, arc: 240 },
   // And home, arriving on the night side so the terminator comes round.
-  { body: 'earth', radii: 3.0, seconds: 38, approach: [-0.3, 0.9, 0.3], linger: 10 },
+  { body: 'earth', radii: 3.0, seconds: 38, approach: [-0.3, 0.9, 0.3], linger: 18, arc: 150 },
 ];
 
 export const FLYBY_ROUTES: readonly FlybyRoute[] = [
@@ -725,33 +786,67 @@ export class FlybyDirector {
     const prev = legs[Math.max(0, index - 1)]!;
     const local = Math.max(0, seconds - start);
 
-    this.legPoint(leg, t, tourTo);
     if (leg.seconds <= 0 || local >= leg.seconds) {
-      // Alongside. Hold the standoff and look at the body.
-      copy(out, tourTo);
-      sub(look, tourTo, out);
+      // Alongside — and still moving. Holding the standoff exactly reads as a
+      // halt, which is what was reported: the journey appeared to stop dead at
+      // the Moon. A slow arc around the body instead, about twenty degrees over
+      // the whole pause, so the limb turns and the light moves across it.
+      const held = Math.max(0, local - leg.seconds);
+      const sweep = ((leg.arc ?? 40) * Math.PI) / 180;
+      // Eased at both ends, so arriving and leaving are not jolts.
+      const k = Math.max(0, Math.min(1, held / Math.max(1, leg.linger)));
+      const swing = (k * k * (3 - 2 * k) - 0.5) * sweep;
+      const drifted: TourLeg = {
+        ...leg,
+        approach: [
+          leg.approach[0] * Math.cos(swing) - leg.approach[1] * Math.sin(swing),
+          leg.approach[0] * Math.sin(swing) + leg.approach[1] * Math.cos(swing),
+          leg.approach[2],
+        ],
+      };
+      this.legPoint(drifted, t, out);
       ephemeris.position(leg.body, t, tourAim);
       sub(look, tourAim, out);
       normalize(look, look);
       return;
     }
+    this.legPoint(leg, t, tourTo);
 
     this.legPoint(prev, t, tourFrom);
     const u = local / leg.seconds;
-    // Integral of the raised cosine, normalised: still, fast, still.
-    const eased = u - Math.sin(2 * Math.PI * u) / (2 * Math.PI);
+    const eased = tourEase(u);
     out.x = tourFrom.x + (tourTo.x - tourFrom.x) * eased;
     out.y = tourFrom.y + (tourTo.y - tourFrom.y) * eased;
     out.z = tourFrom.z + (tourTo.z - tourFrom.z) * eased;
 
     ephemeris.position(prev.body, t, tourAim);
     sub(tourBack, tourAim, out);
+    const behind = len(tourBack);
     normalize(tourBack, tourBack);
     ephemeris.position(leg.body, t, tourAim);
     sub(look, tourAim, out);
     normalize(look, look);
-    // Smoothstep from looking back to looking ahead, over the middle third.
-    const w = Math.max(0, Math.min(1, (u - 0.33) / 0.34));
+
+    // Turn away when there is no longer anything back there to look at.
+    //
+    // This was a fixed fraction of the leg — back for the first third, forward
+    // after two thirds — and on a leg to Mars that is far too late. The speed
+    // profile puts the ship 19% of the way along by a third of the time, which
+    // on a hundred million kilometres is nineteen million: Earth is down to a
+    // readable disc after 15% of the leg's time and to a bare dot after 25%.
+    // The camera was starting its swing nine points after the thing it was
+    // watching had stopped being a thing.
+    //
+    // So the swing follows the apparent size of what is being left rather than
+    // the clock. It holds while the body is wider than six degrees, is done by
+    // the time it is under two thirds of a degree, and a time limit finishes it
+    // regardless by the middle of the leg — otherwise the short hop to the Moon
+    // would spend all of itself looking back at Earth.
+    const behindDeg = (2 * Math.asin(Math.min(1, getBody(prev.body).radius / Math.max(1, behind)))
+      * 180) / Math.PI;
+    const bySize = Math.max(0, Math.min(1, (6 - behindDeg) / 5.4));
+    const byTime = Math.max(0, Math.min(1, (u - 0.16) / 0.3));
+    const w = Math.max(bySize, byTime);
     const blend = w * w * (3 - 2 * w);
     look.x = tourBack.x + (look.x - tourBack.x) * blend;
     look.y = tourBack.y + (look.y - tourBack.y) * blend;
