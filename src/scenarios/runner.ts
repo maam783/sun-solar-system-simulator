@@ -545,6 +545,12 @@ const flypasts: Scenario = {
     const world = ctx.world;
     const route = world.flyby.route;
     if (route && world.flyby.active) {
+      // A journey is not a pass and does not make the framing promise: it
+      // spends most of its length between bodies, where what it left is a
+      // point behind and what it is going to is a point ahead. It is not
+      // counted at all rather than counted and excused, which would drag the
+      // figure down while looking like a failure of the passes.
+      if (route.legs) return;
       const subject = route.subject ?? route.body;
       ctx.memory.frames = (ctx.memory.frames ?? 0) + 1;
 

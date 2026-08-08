@@ -1097,3 +1097,53 @@ an 1800x1800 buffer gives 2.59 million halo pixels and **zero** green.
 (The first check of the texture reported 65,504 texels "with a green cast" and
 was simply a bad test: it flagged G above B, which for a warm halo is every
 texel of it. The number that means something is the alpha step.)
+
+### Thirty-second round — a journey, and the real sky
+
+**The sky was already real, and that was not the complaint.** The 8,920 stars
+come from the HYG catalogue at their true coordinates, magnitudes and colours;
+the constellations are the right ones. What was missing is the part no star
+catalogue holds because it is not stars — the band itself. Without it a sky
+reads as a scatter of dots, which is exactly what a catalogue is.
+
+There is now a photograph behind them: ESO's all-sky panorama by Serge Brunier,
+4,096 across, CC BY 4.0. It is in galactic coordinates, so the sphere carries
+the rotation into the ecliptic — and that was got wrong first: the matrix was
+transposed and put the galactic centre at ecliptic longitude 116.9 instead of
+266.8. Corrected, it lands on 266.84 and -5.54, the measured values to the
+second decimal.
+
+Then checked by looking rather than by trusting the arithmetic. Mean brightness
+toward the galactic centre 24.3, toward the anticentre 9.7, at the north
+galactic pole 2.3 and at the south 2.1 — bright toward the middle, dim toward
+the rim, dark at both poles, and the two poles agreeing with each other, which
+is the symmetry that would have failed had the rotation been wrong. Hiding the
+sky drops the centre to 0.7.
+
+It is not tone-mapped, for the same reason the stars are not: its brightness is
+absolute, and at Pluto's fiftyfold exposure a tone-mapped Milky Way is a white
+sheet.
+
+**The long way round.** Earth to the Moon to Mars and home, 142 seconds.
+
+The difficulty of a journey at this scale is that most of it is nothing, and
+both honest presentations are wrong for a demonstration: fly it at a survivable
+speed and it takes months, or cut, and lose the only thing the distance had to
+say. So each leg runs on a raised-cosine speed profile — still at both ends,
+enormous through the middle. That shape is what makes a hundred million
+kilometres read as *far* rather than as *slow*, because the eye reads change,
+and a constant rate is no change at all.
+
+The aim crossfades across each leg: back at what is being left for the first
+third, forward at what is coming for the last, swinging between them in the
+middle where there is nothing to see either way.
+
+Measured end to end: Earth at 1.95 radii, the Moon at 3.13 at t=42, Mars at
+3.60 at t=87, Earth again at t=131, peak speed 51.6 c on the Mars legs. Those
+are camera moves on rails, as the flypasts are.
+
+The flypast suite caught two things and was right about both: a journey has no
+waypoint list, and the spline read one anyway; and framing was being counted
+against a route that does not make that promise, which dragged the figure to
+84% while looking like a failure of the passes. Journeys are now excluded from
+that count rather than excused within it: 99.8%.

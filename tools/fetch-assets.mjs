@@ -44,6 +44,8 @@ const TEXTURES = {
   'jupiter.jpg': [`${SSS}/2k_jupiter.jpg`],
   'saturn.jpg': [`${SSS}/2k_saturn.jpg`],
   'saturn_ring.png': [`${SSS}/2k_saturn_ring_alpha.png`],
+  // The real sky behind everything: ESO/S. Brunier's all-sky panorama.
+  'milkyway.jpg': ['https://cdn.eso.org/images/large/eso0932a.jpg'],
   'uranus.jpg': [`${SSS}/2k_uranus.jpg`],
   'neptune.jpg': [`${SSS}/2k_neptune.jpg`],
 };

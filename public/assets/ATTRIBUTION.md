@@ -30,3 +30,11 @@ mission to the Moon works against a view of Saturn rather than for it.
 `textures/earth_hi.jpg` is downsampled from NASA's Blue Marble: Next Generation
 (August 2004, topography and bathymetry), 21600x10800 at 2 km per pixel. NASA
 imagery is in the public domain.
+
+## The sky
+
+`textures/milkyway.jpg` is ESO/S. Brunier's all-sky panorama (eso0932a),
+downsampled to 4096 across. Licensed CC BY 4.0; credit ESO/S. Brunier. It is a
+photograph rather than a model, in galactic coordinates, and the scene rotates
+it into the ecliptic — checked by looking: the brightest direction comes out at
+the galactic centre and the two galactic poles come out equally dark.

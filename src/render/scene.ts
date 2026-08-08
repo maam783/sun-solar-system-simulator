@@ -32,7 +32,7 @@ import { STARS } from '../data/stars';
 import { colorIndexToRGB } from '../sim/photometry';
 import {
   PLANET_VERT, PLANET_FRAG, SUN_FRAG, ATMOSPHERE_FRAG,
-  RING_VERT, RING_FRAG, STAR_VERT, STAR_FRAG,
+  RING_VERT, RING_FRAG, STAR_VERT, STAR_FRAG, SKY_VERT, SKY_FRAG,
 } from './shaders';
 import { vec, sub, len, normalize, dot, type Vec3 } from '../math/vec3d';
 import { toQuaternion } from '../math/mat3d';
@@ -136,6 +136,7 @@ export class SolarSystemRenderer {
   private readonly geometries = new Map<number, THREE.SphereGeometry>();
   private sunGlare!: THREE.Sprite;
   private stars!: THREE.Points;
+  private sky!: THREE.Mesh;
   private glowTexture!: THREE.Texture;
 
   private contextLost = false;
@@ -183,6 +184,7 @@ export class SolarSystemRenderer {
     this.camera.position.set(0, 0, 0);
 
     this.glowTexture = makeGlowTexture(1);
+    this.buildSky();
     this.buildStars();
     this.buildBodies();
     this.buildSunGlare();
@@ -349,6 +351,44 @@ export class SolarSystemRenderer {
    * planetary system. They are fixed: at solar-system scale even Alpha
    * Centauri shows no measurable parallax from a ship at Pluto.
    */
+  /**
+   * The Milky Way, from a photograph of it.
+   *
+   * The stars here were always real — 8,920 of them from the HYG catalogue at
+   * their true coordinates, magnitudes and colours, so the constellations out
+   * of the window are the right ones. What was missing is the part no star
+   * catalogue holds, because it is not stars: the band itself. Without it the
+   * sky reads as a scatter of dots, which is what a catalogue is, rather than
+   * as a galaxy seen from the inside.
+   *
+   * The panorama is in *galactic* coordinates, so the sphere carries the
+   * rotation that takes those to the ecliptic. It was checked rather than
+   * assumed — the first attempt had the matrix transposed and put the galactic
+   * centre at ecliptic longitude 116.9 instead of 266.8. As written it lands on
+   * 266.84 and -5.54, which are the measured values to the second decimal.
+   */
+  private buildSky(): void {
+    const material = new THREE.ShaderMaterial({
+      vertexShader: SKY_VERT,
+      fragmentShader: SKY_FRAG,
+      uniforms: { uMap: { value: null }, uBrightness: { value: 0 } },
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    this.sky = new THREE.Mesh(this.sphere(64), material);
+    this.sky.frustumCulled = false;
+    this.sky.renderOrder = -2;
+    this.sky.scale.setScalar(RENDER.starDistance * 1.4);
+    // Galactic to ecliptic. three's Matrix4.set takes rows.
+    this.sky.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(
+      -0.054875560, +0.494109428, -0.867666149, 0,
+      -0.993821379, -0.110990733, -0.000351590, 0,
+      -0.096476626, +0.862285875, +0.497147192, 0,
+      0, 0, 0, 1,
+    ));
+    this.scene.add(this.sky);
+  }
+
   private buildStars(): void {
     const count = STARS.length / 4;
     const positions = new Float32Array(count * 3);
@@ -480,6 +520,12 @@ export class SolarSystemRenderer {
     };
     load('earth_night.jpg', applyNight);
     load('earth_night_hi.jpg', applyNight);
+
+    load('milkyway.jpg', (texture) => {
+      const u = (this.sky.material as THREE.ShaderMaterial).uniforms;
+      u.uMap!.value = texture;
+      u.uBrightness!.value = 0.16;
+    });
 
     load('saturn_ring.png', (texture) => {
       const saturn = this.views.get('saturn');

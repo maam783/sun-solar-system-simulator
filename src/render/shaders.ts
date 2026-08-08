@@ -423,3 +423,44 @@ export const STAR_FRAG = /* glsl */ `
     #include <colorspace_fragment>
   }
 `;
+
+export const SKY_VERT = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+/**
+ * The sky behind everything.
+ *
+ * Not tone-mapped, and that matters: like the stars, its brightness is an
+ * absolute quantity and not something the scene exposure should touch. At
+ * Pluto the exposure opens fifty times, and a Milky Way multiplied by that
+ * would be a white sheet rather than a faint band.
+ *
+ * The image is a long exposure and shows far more than an eye does, so it is
+ * scaled well down. What survives is the shape: the band, the dust lane, the
+ * bulge toward the centre.
+ */
+export const SKY_FRAG = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+
+  uniform sampler2D uMap;
+  uniform float uBrightness;
+
+  varying vec2 vUv;
+
+  void main() {
+    #include <logdepthbuf_fragment>
+    gl_FragColor = vec4(texture2D(uMap, vUv).rgb * uBrightness, 1.0);
+    #include <colorspace_fragment>
+  }
+`;

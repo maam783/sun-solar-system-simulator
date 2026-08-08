@@ -32,7 +32,7 @@ date, with the planets where they actually are.
 
 ## Two ways to use it
 
-**Click a flypast.** The *Sights* panel has nine of them — through Saturn's ring
+**Click a flypast.** The *Sights* panel has ten of them — through Saturn's ring
 plane, slingshots right round Jupiter, Mars and the Sun, Earthrise from behind
 the lunar limb, and Io with Jupiter filling twenty degrees of sky. The
 slingshots come in on the dark side, wrap around the body at a couple of radii
@@ -85,6 +85,10 @@ same solar system — the difference is the drive, not the physics of the world.
   there at all.
 - **Stars.** 8,920 real stars from the HYG catalogue down to magnitude 7. The
   constellations out of the window are the real ones, seen from where you are.
+- **The sky.** ESO's all-sky panorama behind them — a photograph of the Milky
+  Way, not a model of one — rotated from galactic into ecliptic coordinates.
+  Checked by looking: the brightest direction lands on the galactic centre and
+  the two galactic poles come out equally dark.
 
 ## The deliberate exceptions
 
