@@ -1196,3 +1196,42 @@ was still being drawn around a 76 px Mars, indefinitely.
 3.6 arcmin per texel against 2.5 for a screen pixel at 45 degrees on 1080p, so
 it stays a little soft, and there is no fixing that from here: 6000 is what the
 photograph is.
+
+### Thirty-fourth round — the joins, which were the whole problem
+
+Three reports, and all three turned out to be the same class of fault: the
+journey was built as separate motions that met at a boundary, and nothing made
+them agree there.
+
+**The image jumped at each body.** The pass around the body ran from minus half
+its arc to plus half, centred on the arrival point rather than starting from it,
+so the instant the leg ended the ship moved by half the arc in one frame — a
+hundred and twenty degrees at Mars. The arc starts at zero now.
+
+**Then the departure jumped back.** The next leg still set out from where the
+arc *began*, not where it finished, so the position snapped round the far side
+of the planet. Measured, a **734-fold** change of speed between two frames at
+exactly the Mars hand-over.
+
+**Mars arrived at enormous speed and stopped dead.** The leg ended on a fixed
+fraction of its own mean speed and the pass ran at a speed set by its own arc
+and duration; the two had nothing to do with each other. Measured: arriving at
+75,000 km/s and handing over to a pass at 1,089 — a factor of **69, in one
+frame**, which is exactly what reads as a hyperspace jump into a wall. Each leg
+is now told the speeds of the passes on either side of it and its profile is
+built to meet them. The arrival now runs 19,863,721 → 21,554 → 1,073 km/s over
+twenty-four seconds.
+
+**And the crossing had no sense of motion.** On a leg to Mars nothing in the
+frame changes, so the only thing that can say "you are moving" is what is
+receding behind you — which was the reported idea and is the right one. The
+camera looked back at the body just left, and on the way out from the Moon that
+is the Moon: 36 degrees wide at departure and 2.4 four seconds later, so it was
+gone before it had said anything, and the swing went with it.
+
+The look-back target is now judged a few seconds *ahead* rather than now, which
+finds the body that will still be there. Measured across the departure: aiming
+at the Moon at t=48 while it fills 36 degrees, handing to **Earth** at t=51, and
+swinging onto Mars at t=54 with Earth still 1.49 degrees across and plainly a
+disc. Past the Moon, back at home, then away — which is what was asked for, and
+it falls out of the rule rather than being scripted.

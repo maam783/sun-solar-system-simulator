@@ -285,7 +285,7 @@ export class World {
         route.body, route.subject, this.clock.t, route.litTarget ?? 0.98);
       this.updateBodyStates();
     }
-    this.flyby.start(route);
+    this.flyby.start(route, this.clock.t);
     this.flyby.startPosition(this.clock.t, flybyPos, flybyVel);
     this.ship.setState(flybyPos, flybyVel);
     this.targetId = route.subject ?? route.body;

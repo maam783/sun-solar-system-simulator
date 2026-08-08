@@ -167,53 +167,33 @@ function hyperbolaStops(opts: {
   return stops;
 }
 
-/**
- * Fraction of a leg covered by fraction of its time.
- *
- * A raised cosine was the first attempt and it accelerates too hard off the
- * mark: still only instantaneously, then away. What a departure needs is a
- * stretch of genuinely slow movement, so the thing being left recedes at a rate
- * the eye can follow, and the same on arrival.
- *
- * So: a low creep for the first and last seventh, full speed through the
- * middle, cosine shoulders between. Integrated once here rather than solved,
- * because the closed form is unpleasant and this is thirty-two lines of table.
- */
-const TOUR_EASE: number[] = (() => {
+/** Cumulative distance for a speed profile that starts at `cIn` and ends at `cOut`. */
+const buildEase = (cIn: number, cOut: number): number[] => {
   const N = 256;
+  const shoulder = (a: number, b: number, x: number): number => {
+    const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return (1 - Math.cos(Math.PI * k)) / 2;
+  };
   const speed = (u: number): number => {
-    // Three per cent of full speed for the first quarter, and the numbers were
-    // found rather than guessed. Earth stops being a readable disc — eight
-    // pixels — 2.19% of the way along a leg to Mars, so the question is how
-    // much of the leg's *time* that 2.19% buys. The raised cosine this replaced
-    // bought 15.2%. A creep of 0.16 bought 8.2%, which is worse, because a
-    // constant sixth of full speed is faster off the mark than a cosine that
-    // starts at nothing. At 0.03 it buys 23.4%, which on a forty-second leg is
-    // nine seconds of watching home recede.
-    const CREEP = 0.03;
-    const shoulder = (a: number, b: number, x: number): number => {
-      const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
-      return (1 - Math.cos(Math.PI * k)) / 2;
-    };
-    if (u < 0.24) return CREEP;
-    if (u < 0.46) return CREEP + (1 - CREEP) * shoulder(0.24, 0.46, u);
-    if (u < 0.54) return 1;
-    if (u < 0.76) return CREEP + (1 - CREEP) * (1 - shoulder(0.54, 0.76, u));
-    return CREEP;
+    if (u < 0.22) return cIn;
+    if (u < 0.44) return cIn + (1 - cIn) * shoulder(0.22, 0.44, u);
+    if (u < 0.56) return 1;
+    if (u < 0.78) return cOut + (1 - cOut) * (1 - shoulder(0.56, 0.78, u));
+    return cOut;
   };
   const table = [0];
   let acc = 0;
   for (let i = 1; i <= N; i++) {
-    acc += (speed((i - 0.5) / N)) / N;
+    acc += speed((i - 0.5) / N) / N;
     table.push(acc);
   }
   return table.map((v) => v / acc);
-})();
+};
 
-const tourEase = (u: number): number => {
-  const x = Math.max(0, Math.min(1, u)) * (TOUR_EASE.length - 1);
-  const i = Math.min(TOUR_EASE.length - 2, Math.floor(x));
-  return TOUR_EASE[i]! + (TOUR_EASE[i + 1]! - TOUR_EASE[i]!) * (x - i);
+const sampleEase = (table: number[], u: number): number => {
+  const x = Math.max(0, Math.min(1, u)) * (table.length - 1);
+  const i = Math.min(table.length - 2, Math.floor(x));
+  return table[i]! + (table[i + 1]! - table[i]!) * (x - i);
 };
 
 /**
@@ -466,6 +446,7 @@ const tourFrom = vec();
 const tourTo = vec();
 const tourAim = vec();
 const tourBack = vec();
+const tourSoon = vec();
 
 /**
  * Build the frame a route's offsets are measured in.
@@ -600,6 +581,8 @@ export class FlybyDirector {
 
   /** Set while a journey rather than a pass is running. */
   private tour: TourLeg[] | null = null;
+  private tourEases: number[][] = [];
+  private startTime = 0;
 
   private total = 0;
   /**
@@ -622,8 +605,9 @@ export class FlybyDirector {
   private distance: number[] = [];
   private totalLength = 0;
 
-  start(route: FlybyRoute): void {
+  start(route: FlybyRoute, t = 0): void {
     this.route = route;
+    this.startTime = t;
     this.active = true;
     this.elapsed = 0;
     this.message = route.name;
@@ -634,6 +618,7 @@ export class FlybyDirector {
       this.param = [0];
       this.distance = [0];
       this.totalLength = 0;
+      this.buildTourEases(route.legs);
       return;
     }
     this.tour = null;
@@ -740,19 +725,66 @@ export class FlybyDirector {
   }
 
   /**
+   * Speed profiles for the legs, one table each, matched to their neighbours.
+   *
+   * A leg used to end on a fixed fraction of its own mean speed, and the pass
+   * it hands over to runs at a speed of its own — set by how far round the body
+   * it goes and how long it takes. Those two numbers had nothing to do with
+   * each other, and measured they were a factor of 69 apart at Mars: arriving
+   * at 75,000 km/s and handing over to a pass at 1,089. That step, taken in one
+   * frame, is what read as a hyperspace jump ending in a wall.
+   *
+   * So each leg is told what speed to leave at and what speed to arrive at —
+   * the speeds of the passes on either side of it — and the profile is built to
+   * meet them. The middle is then whatever it has to be to cover the distance,
+   * which on the way to Mars is a great deal.
+   */
+  private buildTourEases(legs: TourLeg[]): void {
+    const t = this.startTime;
+    const arcSpeed = (leg: TourLeg): number => {
+      const sweep = ((leg.arc ?? 40) * Math.PI) / 180;
+      return (leg.radii * getBody(leg.body).radius * sweep) / Math.max(1, leg.linger);
+    };
+    this.tourEases = legs.map((leg, i) => {
+      if (i === 0 || leg.seconds <= 0) return [0, 1];
+      const prev = legs[i - 1]!;
+      this.legPoint(prev, t, tourFrom, ((prev.arc ?? 40) * Math.PI) / 180);
+      this.legPoint(leg, t, tourTo);
+      sub(tourAim, tourTo, tourFrom);
+      const distance = Math.max(1, len(tourAim));
+      const mean = distance / leg.seconds;
+      // As a fraction of the mean speed. Clamped so a short hop, where the
+      // pass may be as quick as the crossing, still has a shape.
+      // The profile's numbers are fractions of its *peak*, and the peak is
+      // above the mean by however much of the leg is spent below full speed —
+      // about a factor of two for this shape. Without that the ends come out
+      // twice as fast as the passes they hand over to.
+      const PEAK_OVER_MEAN = 2.0;
+      const k = PEAK_OVER_MEAN / mean;
+      const cIn = Math.max(0.001, Math.min(0.5, arcSpeed(prev) * k));
+      const cOut = Math.max(0.001, Math.min(0.5, arcSpeed(leg) * k));
+      return buildEase(cIn, cOut);
+    });
+  }
+
+  /**
    * Where a leg's standoff point is, right now, in the world.
    *
    * Built from the body's live position and its scenic frame, so a journey
    * planned as "arrive three radii out, on the sunward side and a little above
    * the pole" comes out that way on whatever date it is run.
    */
-  private legPoint(leg: TourLeg, t: number, out: Vec3): void {
+  private legPoint(leg: TourLeg, t: number, out: Vec3, swing = 0): void {
     const pseudo: FlybyRoute = {
       id: '', name: '', blurb: '', body: leg.body, stops: [],
     };
     scenicFrame(pseudo, t);
-    const [a, b, c] = leg.approach;
-    const norm = Math.hypot(a, b, c) || 1;
+    const [a0, b0, c] = leg.approach;
+    const norm = Math.hypot(a0, b0, c) || 1;
+    // Rotated about the polar axis by `swing`, which is how the pass around the
+    // body is expressed and therefore how its *end* is addressed.
+    const a = a0 * Math.cos(swing) - b0 * Math.sin(swing);
+    const b = a0 * Math.sin(swing) + b0 * Math.cos(swing);
     scratchAt[0] = (a / norm) * leg.radii;
     scratchAt[1] = (b / norm) * leg.radii;
     scratchAt[2] = (c / norm) * leg.radii;
@@ -793,18 +825,16 @@ export class FlybyDirector {
       // the whole pause, so the limb turns and the light moves across it.
       const held = Math.max(0, local - leg.seconds);
       const sweep = ((leg.arc ?? 40) * Math.PI) / 180;
-      // Eased at both ends, so arriving and leaving are not jolts.
+      // From zero, which is where the approach put the ship — not centred on
+      // it. Centred, the position jumped by half the arc the instant the leg
+      // ended: a hundred and twenty degrees at Mars, in one frame.
+      //
+      // Linear rather than eased, too. An ease here would start the pass at a
+      // standstill, and the leg now arrives at exactly this speed; easing it
+      // would put the discontinuity back where it was taken out.
       const k = Math.max(0, Math.min(1, held / Math.max(1, leg.linger)));
-      const swing = (k * k * (3 - 2 * k) - 0.5) * sweep;
-      const drifted: TourLeg = {
-        ...leg,
-        approach: [
-          leg.approach[0] * Math.cos(swing) - leg.approach[1] * Math.sin(swing),
-          leg.approach[0] * Math.sin(swing) + leg.approach[1] * Math.cos(swing),
-          leg.approach[2],
-        ],
-      };
-      this.legPoint(drifted, t, out);
+      const swing = k * sweep;
+      this.legPoint(leg, t, out, swing);
       ephemeris.position(leg.body, t, tourAim);
       sub(look, tourAim, out);
       normalize(look, look);
@@ -812,16 +842,53 @@ export class FlybyDirector {
     }
     this.legPoint(leg, t, tourTo);
 
-    this.legPoint(prev, t, tourFrom);
+    // Depart from where the previous pass *finished*, not from where it began.
+    // Leaving from the start of an arc it had already flown put the ship back
+    // round the far side of the planet in one frame — measured, a 734-fold jump
+    // in speed at exactly the Mars hand-over.
+    this.legPoint(prev, t, tourFrom, ((prev.arc ?? 40) * Math.PI) / 180);
     const u = local / leg.seconds;
-    const eased = tourEase(u);
+    const eased = sampleEase(this.tourEases[index] ?? [0, 1], u);
     out.x = tourFrom.x + (tourTo.x - tourFrom.x) * eased;
     out.y = tourFrom.y + (tourTo.y - tourFrom.y) * eased;
     out.z = tourFrom.z + (tourTo.z - tourFrom.z) * eased;
 
-    ephemeris.position(prev.body, t, tourAim);
+    // Look back at whatever is actually worth looking at, which is not always
+    // the thing just left. Leaving the Moon for Mars, the Moon is enormous for
+    // a few seconds and then gone, while Earth stays a disc for far longer —
+    // and it is Earth receding that says *you are moving*, on a leg where
+    // nothing else in the frame changes at all. Picking by apparent size hands
+    // over from one to the other on its own.
+    let backBody = prev.body;
+    let backDist = 0;
+    {
+      // Judged a few seconds ahead rather than now, which is the whole of it.
+      // Measured on the leg out to Mars: at the moment of departure the Moon is
+      // 36 degrees wide and Earth is 2, so picking by present size picks the
+      // Moon — and four seconds later the Moon is 2.4 degrees and falling
+      // through the floor, so the camera has already swung away. Earth is still
+      // 1.6 and holds for another twenty seconds. What is wanted behind you on
+      // a long departure is the thing you came *from*, and looking a little
+      // ahead is what finds it without having to say so.
+      const ahead = Math.min(1, u + 0.09);
+      const ea = sampleEase(this.tourEases[index] ?? [0, 1], ahead);
+      tourSoon.x = tourFrom.x + (tourTo.x - tourFrom.x) * ea;
+      tourSoon.y = tourFrom.y + (tourTo.y - tourFrom.y) * ea;
+      tourSoon.z = tourFrom.z + (tourTo.z - tourFrom.z) * ea;
+      let bestSpan = -1;
+      for (const id of [prev.body, legs[Math.max(0, index - 2)]!.body]) {
+        ephemeris.position(id, t, tourAim);
+        sub(tourBack, tourAim, tourSoon);
+        const span = getBody(id).radius / Math.max(1, len(tourBack));
+        if (span > bestSpan) { bestSpan = span; backBody = id; }
+      }
+      ephemeris.position(backBody, t, tourAim);
+      sub(tourBack, tourAim, out);
+      backDist = Math.max(1, len(tourBack));
+    }
+    ephemeris.position(backBody, t, tourAim);
     sub(tourBack, tourAim, out);
-    const behind = len(tourBack);
+    const behind = backDist || len(tourBack);
     normalize(tourBack, tourBack);
     ephemeris.position(leg.body, t, tourAim);
     sub(look, tourAim, out);
@@ -842,10 +909,12 @@ export class FlybyDirector {
     // the time it is under two thirds of a degree, and a time limit finishes it
     // regardless by the middle of the leg — otherwise the short hop to the Moon
     // would spend all of itself looking back at Earth.
-    const behindDeg = (2 * Math.asin(Math.min(1, getBody(prev.body).radius / Math.max(1, behind)))
+    const behindDeg = (2 * Math.asin(Math.min(1, getBody(backBody).radius / Math.max(1, behind)))
       * 180) / Math.PI;
-    const bySize = Math.max(0, Math.min(1, (6 - behindDeg) / 5.4));
-    const byTime = Math.max(0, Math.min(1, (u - 0.16) / 0.3));
+    // Three degrees down to a third of one: the body is still a shape at the
+    // top of that and a dot at the bottom, and the swing happens across it.
+    const bySize = Math.max(0, Math.min(1, (3 - behindDeg) / 2.65));
+    const byTime = Math.max(0, Math.min(1, (u - 0.3) / 0.28));
     const w = Math.max(bySize, byTime);
     const blend = w * w * (3 - 2 * w);
     look.x = tourBack.x + (look.x - tourBack.x) * blend;
