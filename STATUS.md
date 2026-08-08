@@ -1235,3 +1235,72 @@ at the Moon at t=48 while it fills 36 degrees, handing to **Earth** at t=51, and
 swinging onto Mars at t=54 with Earth still 1.49 degrees across and plainly a
 disc. Past the Moon, back at home, then away — which is what was asked for, and
 it falls out of the rule rather than being scripted.
+
+### Thirty-fifth round — one trajectory instead of pieces joined together
+
+The last round fixed three joins and the report came back that it still stops at
+the Moon, flies round it, and then swings violently — that it reads as an
+animation panning onto planets rather than a ship flying. Fixing joins one at a
+time and having the next one surface is the sign that the joins were never the
+problem: **having joins was**.
+
+The journey was a straight run to a body, then a circular arc around it, then
+the next straight run. A circular arc is an *orbit*, and an orbit cannot be
+joined to a crossing: its velocity is tangential everywhere, so it always meets
+a departure line at an angle. Measured at the end of the Earth arc, **37.4
+degrees between two frames**, with the pacing correctly crawling to 140 km/s to
+get round the corner. That crawl is the reported halt.
+
+**A flypast is a hyperbola**, and a hyperbola solves this by construction: it
+comes in along a straight asymptote, does all its turning at the body, and
+leaves along another straight asymptote — and those asymptotes *are* the
+crossings. Each pass is now built from where the ship came from and where it is
+going: the velocity turns by the angle between them, which fixes the shape
+through `e = 1 / sin(delta/2)`, the standard deflection relation. Nothing about
+the sweep is authored any more. The Mars pass turns the ship right around
+because the journey goes out and comes back, which is why it wraps the planet —
+not because a number said 240 degrees.
+
+That left three faults of my own making, each found by measurement:
+
+- **The departure overshot its destination.** The pass extended to 150 body
+  radii — 955,650 km for Earth, and the Moon is at 384,400. The crossing had to
+  double back to reach it: **177 degrees**, twice, in the control points
+  themselves. Each end of a pass is now bounded by the neighbour it reaches
+  towards.
+- **The curve backed up between waypoints.** Uniform Catmull-Rom takes the
+  tangent at a point from its neighbours however far away they are, and a
+  journey's waypoints are thousands of kilometres apart at Mars and tens of
+  millions on the way to it. Measured on the crossing to the Moon, the ship went
+  forward 3,000 km, back 1,200, and forward again — twice, inside half a second.
+  Centripetal parameterisation is the standard cure and is provably free of
+  cusps.
+- **The timing table was under-sampled where the time goes.** Spread evenly over
+  the curve's parameter, every span between two waypoints got the same number of
+  samples however long it was, so the crossings came out coarse and the ship's
+  speed stepped by a factor of two between frames. Twelve thousand samples
+  placed by where the time actually goes beat two hundred thousand placed
+  evenly, and lay out in 9.7 ms rather than 138.
+
+Two more things were made properties of the machinery rather than results of a
+rule. The pacing metric **sums** over the bodies instead of taking the largest:
+a maximum switches, and at a switch the derivative jumps. And the camera is now
+**integrated rather than assigned** — a critically damped spring with a rate
+ceiling, fed forward with the subject's own motion across the sky. Without the
+feed-forward a spring settles at whatever error keeps it up with the target, and
+at Mars that lag put the planet **37.8 degrees off centre for the entire pass**.
+
+| | before | after |
+|---|---|---|
+| worst speed change between frames | 734x | **1.06x** |
+| sharpest bend between frames | 37.4 deg | **1.40 deg** |
+| subject off centre during a pass | 37.8 deg | **0.1 deg** |
+
+The camera picks its subject by which body will be largest *by the time it has
+finished turning to it*, which needs no knowledge of legs. The look back at
+Earth on the way out of the Moon — asked for, and previously scripted — now
+falls out of that rule on its own: Earth at 1.58 degrees at t=70 and 1.26 at
+t=72, before the swing onto Mars.
+
+Closest approaches come out at exactly the authored periapsis: Earth 2.40, the
+Moon 3.20, Mars 2.30 radii.

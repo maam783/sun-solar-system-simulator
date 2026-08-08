@@ -90,26 +90,26 @@ export interface TourLeg {
   body: string;
   /** How close to come, in that body's radii. */
   radii: number;
-  /** Seconds of the shot spent getting there. */
+  /**
+   * This leg's share of the running time.
+   *
+   * A share, not a schedule: where the ship is at each moment comes from the
+   * timing table, which spends time where something is happening. All these
+   * add up to how long the journey lasts, and nothing else.
+   */
   seconds: number;
   /**
-   * Where the standoff sits, in the body's scenic frame: [sunward, across,
-   * polar], in radii, normalised. Picks which side you arrive on, and so what
-   * the light does.
+   * Where closest approach sits, in the body's scenic frame: [sunward, across,
+   * polar], normalised. Picks which side of the body the pass happens on, and
+   * so what the light does.
+   *
+   * It decides the whole shape at the two ends of the journey, where there is
+   * only one direction to satisfy. In the middle it only chooses the plane,
+   * and only when the pass turns the ship right around — anywhere else the
+   * geometry has already fixed the plane, because a flypast's plane is the one
+   * containing where you came from and where you are going.
    */
   approach: [number, number, number];
-  /** Seconds spent alongside before the next leg starts. */
-  linger: number;
-  /**
-   * Degrees swept around the body during the linger.
-   *
-   * A journey that halts at each stop is a slideshow. What is wanted at the far
-   * end of a round trip is a pass *round* the planet — the terminator coming
-   * over the limb, the surface turning underneath — and that is a question of
-   * how much of the sky the ship walks through while it is there, not of how
-   * long it waits.
-   */
-  arc?: number;
 }
 
 /**
@@ -167,35 +167,6 @@ function hyperbolaStops(opts: {
   return stops;
 }
 
-/** Cumulative distance for a speed profile that starts at `cIn` and ends at `cOut`. */
-const buildEase = (cIn: number, cOut: number): number[] => {
-  const N = 256;
-  const shoulder = (a: number, b: number, x: number): number => {
-    const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
-    return (1 - Math.cos(Math.PI * k)) / 2;
-  };
-  const speed = (u: number): number => {
-    if (u < 0.22) return cIn;
-    if (u < 0.44) return cIn + (1 - cIn) * shoulder(0.22, 0.44, u);
-    if (u < 0.56) return 1;
-    if (u < 0.78) return cOut + (1 - cOut) * (1 - shoulder(0.56, 0.78, u));
-    return cOut;
-  };
-  const table = [0];
-  let acc = 0;
-  for (let i = 1; i <= N; i++) {
-    acc += speed((i - 0.5) / N) / N;
-    table.push(acc);
-  }
-  return table.map((v) => v / acc);
-};
-
-const sampleEase = (table: number[], u: number): number => {
-  const x = Math.max(0, Math.min(1, u)) * (table.length - 1);
-  const i = Math.min(table.length - 2, Math.floor(x));
-  return table[i]! + (table[i + 1]! - table[i]!) * (x - i);
-};
-
 /**
  * Waypoints along a circular orbit in the scenic XY plane, by angle from the
  * -X axis. Used where a shot wants a steady rate rather than an encounter.
@@ -240,15 +211,15 @@ function circularStops(opts: {
  */
 const GRAND_TOUR: TourLeg[] = [
   // Away from Earth, out of the daylight side, with home filling the window.
-  { body: 'earth', radii: 2.4, seconds: 0, approach: [1, 0.35, 0.25], linger: 8, arc: 45 },
+  { body: 'earth', radii: 2.4, seconds: 8, approach: [1, 0.35, 0.25] },
   // The Moon: near enough that it is a place, and lit from the side.
-  { body: 'moon', radii: 3.2, seconds: 26, approach: [0.55, 0.8, 0.2], linger: 14, arc: 130 },
+  { body: 'moon', radii: 3.2, seconds: 40, approach: [0.55, 0.8, 0.2] },
   // The long one. Tens of millions of kilometres of nothing, in half a minute.
   // The far end of the round trip, and the reason for it: right round the
   // planet, from the night side into the light.
-  { body: 'mars', radii: 2.3, seconds: 40, approach: [-0.55, 0.75, 0.25], linger: 30, arc: 240 },
+  { body: 'mars', radii: 2.3, seconds: 70, approach: [-0.55, 0.75, 0.25] },
   // And home, arriving on the night side so the terminator comes round.
-  { body: 'earth', radii: 3.0, seconds: 38, approach: [-0.3, 0.9, 0.3], linger: 18, arc: 150 },
+  { body: 'earth', radii: 3.0, seconds: 56, approach: [-0.3, 0.9, 0.3] },
 ];
 
 export const FLYBY_ROUTES: readonly FlybyRoute[] = [
@@ -442,11 +413,15 @@ const tmp = vec();
 const posA = vec();
 const posB = vec();
 const aimUp = vec();
-const tourFrom = vec();
-const tourTo = vec();
 const tourAim = vec();
 const tourBack = vec();
-const tourSoon = vec();
+const timeA = vec();
+const timeB = vec();
+const aimTo = vec();
+const aimWant = vec();
+const aimAxis = vec();
+const aimSoon = vec();
+const aimNext = vec();
 
 /**
  * Build the frame a route's offsets are measured in.
@@ -520,6 +495,97 @@ const splineAt = (stops: readonly FlybyStop[], u: number, out: number[]): void =
   }
 };
 
+/**
+ * One control point of a journey, pinned to a body.
+ *
+ * The offset is frozen when the route starts and the body's live position is
+ * added back every frame, so the path travels with the Moon and with Mars
+ * instead of aiming at where they were when you set off.
+ */
+interface TourNode {
+  body: string;
+  off: [number, number, number];
+}
+
+const crP0 = vec();
+const crP1 = vec();
+const crP2 = vec();
+const crP3 = vec();
+const crA1 = vec();
+const crA2 = vec();
+const crA3 = vec();
+const crB1 = vec();
+const crB2 = vec();
+const crEdge = vec();
+
+const crLerp = (out: Vec3, a: Vec3, b: Vec3, w: number): void => {
+  out.x = a.x + (b.x - a.x) * w;
+  out.y = a.y + (b.y - a.y) * w;
+  out.z = a.z + (b.z - a.z) * w;
+};
+
+/**
+ * Centripetal Catmull-Rom through control points supplied by a getter, so the
+ * same curve can be evaluated against frozen positions (for the timing table,
+ * twelve thousand samples, no ephemeris) or against live ones (for the frame).
+ *
+ * Centripetal — knots spaced by the square root of the chord — rather than the
+ * uniform kind used for the flypasts, and the difference is not cosmetic here.
+ * A journey's control points are a few thousand kilometres apart around Mars
+ * and tens of millions apart on the way to it. Uniform Catmull-Rom takes the
+ * tangent at each point from its neighbours regardless of how far away they
+ * are, so where the spacing changes the tangent is the wrong length for the
+ * span it has to cover, and the curve loops back on itself to make up the
+ * difference. Measured on the crossing to the Moon, the ship went forward
+ * three thousand kilometres, came back twelve hundred, and went forward again
+ * — twice, inside half a second. Centripetal parameterisation is the standard
+ * cure and is provably free of cusps and self-intersection.
+ */
+const crAt = (
+  get: (i: number, out: Vec3) => void, n: number, u: number, out: Vec3,
+): void => {
+  if (n === 0) { set(out, 0, 0, 0); return; }
+  if (n === 1) { get(0, out); return; }
+  // Beyond the ends, reflect through the last point rather than repeating it:
+  // a repeated point has zero chord, and a zero knot span is a division by
+  // zero dressed up as a duplicate.
+  const fetch = (idx: number, dst: Vec3): void => {
+    if (idx < 0) {
+      get(0, dst); get(1, crEdge);
+    } else if (idx > n - 1) {
+      get(n - 1, dst); get(n - 2, crEdge);
+    } else {
+      get(idx, dst);
+      return;
+    }
+    dst.x = 2 * dst.x - crEdge.x;
+    dst.y = 2 * dst.y - crEdge.y;
+    dst.z = 2 * dst.z - crEdge.z;
+  };
+
+  const i = Math.max(0, Math.min(n - 2, Math.floor(u)));
+  const s = Math.max(0, Math.min(1, u - i));
+  fetch(i - 1, crP0);
+  fetch(i, crP1);
+  fetch(i + 1, crP2);
+  fetch(i + 2, crP3);
+
+  const knot = (a: Vec3, b: Vec3): number => Math.max(
+    1e-6, Math.sqrt(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z)),
+  );
+  const t1 = knot(crP0, crP1);
+  const t2 = t1 + knot(crP1, crP2);
+  const t3 = t2 + knot(crP2, crP3);
+  const t = t1 + s * (t2 - t1);
+
+  crLerp(crA1, crP0, crP1, t / t1);
+  crLerp(crA2, crP1, crP2, (t - t1) / (t2 - t1));
+  crLerp(crA3, crP2, crP3, (t - t2) / (t3 - t2));
+  crLerp(crB1, crA1, crA2, t / t2);
+  crLerp(crB2, crA2, crA3, (t - t1) / (t3 - t1));
+  crLerp(out, crB1, crB2, (t - t1) / (t2 - t1));
+};
+
 const scratchAt = [0, 0, 0];
 const lengthA = [0, 0, 0];
 const lengthB = [0, 0, 0];
@@ -581,8 +647,29 @@ export class FlybyDirector {
 
   /** Set while a journey rather than a pass is running. */
   private tour: TourLeg[] | null = null;
-  private tourEases: number[][] = [];
-  private startTime = 0;
+
+  /** Control points of a journey, and their world positions when it started. */
+  private nodes: TourNode[] = [];
+  private frozen: number[] = [];
+  /** The bodies a journey visits, once each: its subjects and its obstacles. */
+  private tourBodies: string[] = [];
+  private tourBodyPos: number[] = [];
+
+  /**
+   * Where the camera is looking, as a state rather than as a result.
+   *
+   * The aim used to be computed fresh each frame and handed straight out, so
+   * the moment the rule changed its mind the view changed with it — a swing of
+   * a hundred degrees inside one frame if that is what the arithmetic said.
+   * That is the same fault the manual controls had before they were given
+   * torque and damping: a direction that is *assigned* can move at any speed.
+   * Here it is integrated instead, through a critically damped spring with a
+   * rate ceiling, so no rule and no join can produce a turn faster than a
+   * ship could make.
+   */
+  private aimDir = vec();
+  private aimRate = 0;
+  aimSubject = '';
 
   private total = 0;
   /**
@@ -607,21 +694,26 @@ export class FlybyDirector {
 
   start(route: FlybyRoute, t = 0): void {
     this.route = route;
-    this.startTime = t;
     this.active = true;
     this.elapsed = 0;
     this.message = route.name;
 
+    set(this.aimDir, 0, 0, 0);
+    this.aimRate = 0;
+    this.aimSubject = '';
+
     if (route.legs && route.legs.length > 1) {
       this.tour = route.legs;
-      this.total = route.legs.reduce((a, l) => a + l.seconds + l.linger, 0);
-      this.param = [0];
-      this.distance = [0];
-      this.totalLength = 0;
-      this.buildTourEases(route.legs);
+      // The authored seconds no longer place anything; they only say how long
+      // the journey lasts. Where the ship is at each moment inside that comes
+      // from the timing table, as it does for a flypast.
+      this.total = route.legs.reduce((a, l) => a + l.seconds, 0);
+      this.buildTourNodes(route.legs, t);
+      this.buildTourTiming();
       return;
     }
     this.tour = null;
+    this.nodes = [];
 
     // Authored times set how long the shot lasts; the arc-length table decides
     // where the ship is at each moment within it.
@@ -725,46 +817,313 @@ export class FlybyDirector {
   }
 
   /**
-   * Speed profiles for the legs, one table each, matched to their neighbours.
+   * Lay the whole journey out as one curve.
    *
-   * A leg used to end on a fixed fraction of its own mean speed, and the pass
-   * it hands over to runs at a speed of its own — set by how far round the body
-   * it goes and how long it takes. Those two numbers had nothing to do with
-   * each other, and measured they were a factor of 69 apart at Mars: arriving
-   * at 75,000 km/s and handing over to a pass at 1,089. That step, taken in one
-   * frame, is what read as a hyperspace jump ending in a wall.
+   * It used to be built as legs: a straight run to a body, then a separate,
+   * much slower arc around it, then the next straight run. Two different kinds
+   * of motion meeting at a boundary, and every fault reported against this
+   * route came from a boundary — the position jumping, the speed stepping by a
+   * factor of seventy, the ship appearing to stop dead alongside the Moon and
+   * then set off again. Each was fixed in turn and the next one surfaced,
+   * which is the sign that the joins were not the problem: having joins was.
    *
-   * So each leg is told what speed to leave at and what speed to arrive at —
-   * the speeds of the passes on either side of it — and the profile is built to
-   * meet them. The middle is then whatever it has to be to cover the distance,
-   * which on the way to Mars is a great deal.
+   * So there are none. Every waypoint of the journey — the passes and the
+   * crossings alike — goes into a single Catmull-Rom, which is continuous in
+   * position and tangent by construction, and the ship runs along it under one
+   * speed profile from Earth to Earth. There is no moment at which anything
+   * hands over to anything, because there is only one thing.
+   *
+   * The passes are centred on closest approach rather than ending at it, which
+   * is what makes them read as flying past a place instead of arriving at one.
    */
-  private buildTourEases(legs: TourLeg[]): void {
-    const t = this.startTime;
-    const arcSpeed = (leg: TourLeg): number => {
-      const sweep = ((leg.arc ?? 40) * Math.PI) / 180;
-      return (leg.radii * getBody(leg.body).radius * sweep) / Math.max(1, leg.linger);
-    };
-    this.tourEases = legs.map((leg, i) => {
-      if (i === 0 || leg.seconds <= 0) return [0, 1];
-      const prev = legs[i - 1]!;
-      this.legPoint(prev, t, tourFrom, ((prev.arc ?? 40) * Math.PI) / 180);
-      this.legPoint(leg, t, tourTo);
-      sub(tourAim, tourTo, tourFrom);
-      const distance = Math.max(1, len(tourAim));
-      const mean = distance / leg.seconds;
-      // As a fraction of the mean speed. Clamped so a short hop, where the
-      // pass may be as quick as the crossing, still has a shape.
-      // The profile's numbers are fractions of its *peak*, and the peak is
-      // above the mean by however much of the leg is spent below full speed —
-      // about a factor of two for this shape. Without that the ends come out
-      // twice as fast as the passes they hand over to.
-      const PEAK_OVER_MEAN = 2.0;
-      const k = PEAK_OVER_MEAN / mean;
-      const cIn = Math.max(0.001, Math.min(0.5, arcSpeed(prev) * k));
-      const cOut = Math.max(0.001, Math.min(0.5, arcSpeed(leg) * k));
-      return buildEase(cIn, cOut);
+  private buildTourNodes(legs: TourLeg[], t: number): void {
+    const ARC = 17;
+    const centres = legs.map((l) => ephemeris.position(l.body, t, vec()));
+
+    const arcs: Vec3[][] = legs.map((leg, i) => {
+      const radius = getBody(leg.body).radius;
+      const q = leg.radii * radius;
+      const centre = centres[i]!;
+
+      // The authored standoff, as a direction from the body: which side the
+      // pass happens on, and so what the light does.
+      this.legPoint(leg, t, tourAim, 0);
+      const approach = normalize(vec(), sub(vec(), tourAim, centre));
+
+      const inDir = i > 0
+        ? normalize(vec(), sub(vec(), centre, centres[i - 1]!)) : null;
+      const outDir = i < legs.length - 1
+        ? normalize(vec(), sub(vec(), centres[i + 1]!, centre)) : null;
+
+      // How far out each end of the pass reaches, before the crossing takes
+      // over. Bounded by the neighbour it is reaching towards, because a fixed
+      // number of radii does not know how far away anything is: a hundred and
+      // fifty Earth radii is nine hundred and fifty thousand kilometres, and
+      // the Moon is at three hundred and eighty. The departure overshot the
+      // destination and the crossing had to double back to reach it — measured,
+      // a hundred and seventy-seven degrees, twice, in the control points
+      // themselves.
+      const gap = (other: number): number => {
+        const o = centres[other];
+        return o ? len(sub(vec(), o, centre)) : Infinity;
+      };
+      const reach = (dist: number): number => Math.min(radius * 150, dist * 0.25);
+
+      let e: number;
+      let peri: Vec3;
+      let along: Vec3;
+      let from: number;
+      let to: number;
+
+      if (inDir && outDir) {
+        // A real encounter: the velocity turns by the angle between where the
+        // ship came from and where it is going, and that angle fixes the shape
+        // — e = 1 / sin(delta/2) is the standard deflection relation. Nothing
+        // here is authored, which is the point: the pass and the two crossings
+        // are one trajectory, so they cannot disagree at the ends.
+        const delta = Math.acos(Math.max(-1, Math.min(1, dot(inDir, outDir))));
+        e = Math.max(1.001, 1 / Math.max(1e-3, Math.sin(delta / 2)));
+        const h = cross(vec(), inDir, outDir);
+        if (len(h) < 1e-6) {
+          // Turned right around — comes back the way it came, so the plane is
+          // free. Take it from the authored side, which is what that field is
+          // for and the only place it still has a say on a middle pass.
+          cross(h, inDir, approach);
+          if (len(h) < 1e-6) set(h, 0, 0, 1);
+        }
+        normalize(h, h);
+        const sum = addScaled(vec(), inDir, outDir, 1);
+        if (len(sum) < 1e-3) cross(sum, h, inDir);
+        along = normalize(sum, sum);
+        peri = normalize(vec(), cross(vec(), along, h));
+        const limit = Math.acos(-1 / e) * 0.985;
+        to = Math.min(limit, this.trueAnomalyAt(q, e, reach(gap(i + 1))));
+        from = -Math.min(limit, this.trueAnomalyAt(q, e, reach(gap(i - 1))));
+      } else {
+        // The ends of the journey. There is only one asymptote to satisfy, so
+        // the shape is free and the authored side decides it: leave from
+        // closest approach on the lit side, or arrive at it.
+        const away = outDir
+          ? outDir
+          : normalize(vec(), scale(vec(), inDir!, -1));
+        const raw = Math.acos(Math.max(-1, Math.min(1, dot(approach, away))));
+        const psi = Math.max((100 * Math.PI) / 180, Math.min((170 * Math.PI) / 180, raw));
+        e = -1 / Math.cos(psi);
+        const perp = addScaled(vec(), approach, away, -dot(approach, away));
+        if (len(perp) < 1e-9) {
+          cross(perp, away, axisZ);
+          if (len(perp) < 1e-9) cross(perp, away, axisX);
+        }
+        normalize(perp, perp);
+        peri = normalize(vec(), addScaled(vec(), scale(vec(), away, Math.cos(psi)), perp, Math.sin(psi)));
+        const limit = Math.acos(-1 / e) * 0.985;
+        const end = Math.min(
+          limit, this.trueAnomalyAt(q, e, reach(gap(outDir ? i + 1 : i - 1))),
+        );
+        if (outDir) {
+          along = normalize(vec(), addScaled(vec(), away, peri, -Math.cos(psi)));
+          from = 0; to = end;
+        } else {
+          along = normalize(vec(), addScaled(vec(), inDir!, peri, Math.cos(psi)));
+          from = -end; to = 0;
+        }
+      }
+
+      const p = q * (1 + e);
+      const points: Vec3[] = [];
+      for (let k = 0; k < ARC; k++) {
+        const nu = from + ((to - from) * k) / (ARC - 1);
+        const r = p / (1 + e * Math.cos(nu));
+        const point = copy(vec(), centre);
+        addScaled(point, point, peri, r * Math.cos(nu));
+        addScaled(point, point, along, r * Math.sin(nu));
+        points.push(point);
+      }
+      return points;
     });
+
+    const nodes: TourNode[] = [];
+    const frozen: number[] = [];
+    const bodies: string[] = [];
+    const bodyPositions: number[] = [];
+    const push = (body: string, world: Vec3): void => {
+      ephemeris.position(body, t, tourAim);
+      nodes.push({
+        body,
+        off: [world.x - tourAim.x, world.y - tourAim.y, world.z - tourAim.z],
+      });
+      frozen.push(world.x, world.y, world.z);
+      if (!bodies.includes(body)) {
+        bodies.push(body);
+        bodyPositions.push(tourAim.x, tourAim.y, tourAim.z);
+      }
+    };
+
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i]!;
+      const arc = arcs[i]!;
+      for (const point of arc) push(leg.body, point);
+
+      const next = legs[i + 1];
+      if (!next) break;
+      const nextArc = arcs[i + 1]!;
+      const exit = arc[ARC - 1]!;
+      const entry = nextArc[0]!;
+      sub(tmp, entry, exit);
+      const span = Math.max(1, len(tmp));
+
+      // The crossing is a straight line, because both ends are already on
+      // their asymptotes and an asymptote *is* a straight line. The two
+      // asymptotes are offset from each other by the impact parameters, a few
+      // thousand kilometres across tens of millions, which is a few
+      // thousandths of a degree — below anything the eye or the pacing can
+      // pick up.
+      //
+      // Spaced by doubling and halving so no two neighbouring segments differ
+      // by more than a factor of two, whatever the ratio between a pass and
+      // the crossing that follows it.
+      const point = vec();
+      const at = (f: number): Vec3 => addScaled(point, exit, tmp, f);
+      const stepOut = Math.max(1, len(sub(vec(), exit, arc[ARC - 2]!)));
+      const stepIn = Math.max(1, len(sub(vec(), nextArc[1]!, entry)));
+      for (let d = stepOut; d < span * 0.5; d *= 2) push(leg.body, at(d / span));
+      const back: number[] = [];
+      for (let d = stepIn; d < span * 0.5; d *= 2) back.push(1 - d / span);
+      for (let k = back.length - 1; k >= 0; k--) push(next.body, at(back[k]!));
+    }
+
+    this.nodes = nodes;
+    this.frozen = frozen;
+    this.tourBodies = bodies;
+    this.tourBodyPos = bodyPositions;
+  }
+
+  /** True anomaly at which a conic of periapsis `q` and eccentricity `e` reaches `r`. */
+  private trueAnomalyAt(q: number, e: number, r: number): number {
+    const p = q * (1 + e);
+    return Math.acos(Math.max(-1, Math.min(1, (p / Math.max(q, r) - 1) / e)));
+  }
+
+  /**
+   * How much of the journey's time each stretch of it is worth.
+   *
+   * The same rule the flypasts use, and for the same reason: what an eye reads
+   * motion from is how fast a surface slides across the field of view, not how
+   * many metres are covered. Budgeting equal *angle* per second makes the ship
+   * sweep slowly round a body at close range and cross the empty parts fast,
+   * out of one continuous profile rather than out of a decision about which
+   * leg it is on.
+   *
+   * The empty parts need a term of their own, because when nothing is near,
+   * angle is nearly zero and they would take no time at all. Distance is the
+   * wrong measure for it — Earth to Mars is two hundred times Earth to the
+   * Moon, and would swallow the whole budget — so the term is the change in
+   * the *logarithm* of the range: every factor of ten counts the same. That
+   * puts the ratio between the crossings at about two to one instead of two
+   * hundred, which is what lets the short hop be a hop and the long one still
+   * feel long.
+   */
+  private buildTourTiming(): void {
+    const n = this.nodes.length;
+    const frozen = this.frozen;
+    const get = (i: number, out: Vec3): void => {
+      const k = Math.max(0, Math.min(n - 1, i)) * 3;
+      set(out, frozen[k]!, frozen[k + 1]!, frozen[k + 2]!);
+    };
+    // Two passes, because where the samples go matters more than how many.
+    //
+    // Spread evenly over the curve's own parameter, every span between two
+    // control points gets the same number however long it is — and they range
+    // from five thousand kilometres around Mars to twenty million out in the
+    // crossing. The crossings came out coarse enough that the ship's speed
+    // stepped by a factor of two between frames while the Moon was still six
+    // degrees wide behind it, and no amount of smoothing fixes an under-sampled
+    // table; it only spreads the error. Twelve thousand samples placed by where
+    // the time actually goes beat two hundred thousand placed evenly, and cost
+    // a tenth as long to lay out.
+    const spans = n - 1;
+    const COARSE = 12;
+    const weight: number[] = [];
+    let coarse = 0;
+    for (let j = 0; j < spans; j++) {
+      let sum = 0;
+      crAt(get, n, j, timeA);
+      for (let k = 1; k <= COARSE; k++) {
+        crAt(get, n, j + k / COARSE, timeB);
+        sum += this.tourMetric(timeA, timeB);
+        copy(timeA, timeB);
+      }
+      weight.push(sum);
+      coarse += sum;
+    }
+
+    const BUDGET = 12000;
+    this.param = [0];
+    this.distance = [0];
+    let acc = 0;
+    crAt(get, n, 0, timeA);
+    for (let j = 0; j < spans; j++) {
+      const share = coarse > 0 ? weight[j]! / coarse : 1 / spans;
+      const steps = Math.max(6, Math.round(BUDGET * share));
+      for (let k = 1; k <= steps; k++) {
+        const u = j + k / steps;
+        crAt(get, n, u, timeB);
+        acc += this.tourMetric(timeA, timeB);
+        copy(timeA, timeB);
+        this.param.push(u);
+        this.distance.push(acc);
+      }
+    }
+    this.totalLength = acc;
+  }
+
+  /**
+   * How much is happening between two points of the path: the angle every body
+   * sweeps past, plus a share for the stretches where nothing does.
+   *
+   * Summed over the bodies rather than taking the largest, and that is not a
+   * detail. A maximum switches — there is a moment on the way out from the
+   * Moon where Earth takes over as the thing setting the pace — and at a switch
+   * the derivative jumps, so the ship's speed steps. Measured, nearly a factor
+   * of two inside one frame with the Moon still six degrees wide behind it. A
+   * sum of continuous terms has nowhere to switch. Where one body dominates it
+   * is the same number to three figures; where two are comparable it hands over
+   * smoothly, which is what was wanted at the switch in the first place.
+   */
+  private tourMetric(a: Vec3, b: Vec3): number {
+    const EMPTY = 0.045;
+    let angle = 0;
+    let empty = 0;
+    for (let i = 0; i < this.tourBodies.length; i++) {
+      const radius = getBody(this.tourBodies[i]!).radius;
+      const k = i * 3;
+      const px = this.tourBodyPos[k]!;
+      const py = this.tourBodyPos[k + 1]!;
+      const pz = this.tourBodyPos[k + 2]!;
+      const ax = a.x - px; const ay = a.y - py; const az = a.z - pz;
+      const bx = b.x - px; const by = b.y - py; const bz = b.z - pz;
+      const da = Math.max(radius, Math.hypot(ax, ay, az));
+      const db = Math.max(radius, Math.hypot(bx, by, bz));
+      const cos = (ax * bx + ay * by + az * bz) / (da * db);
+      angle += Math.acos(Math.max(-1, Math.min(1, cos)));
+      const ra = da / radius;
+      const rb = db / radius;
+      angle += Math.abs(Math.asin(1 / rb) - Math.asin(1 / ra));
+      // Every factor of ten in range counts the same, so the crossing to Mars
+      // is worth about twice the hop to the Moon rather than two hundred times
+      // it. Distance is the wrong measure: it would swallow the whole budget.
+      empty += Math.abs(Math.log(rb) - Math.log(ra));
+    }
+    return angle + EMPTY * empty;
+  }
+
+  /** A journey's control point, now, in the world. */
+  private nodeAt(i: number, t: number, out: Vec3): void {
+    const node = this.nodes[Math.max(0, Math.min(this.nodes.length - 1, i))]!;
+    ephemeris.position(node.body, t, out);
+    out.x += node.off[0];
+    out.y += node.off[1];
+    out.z += node.off[2];
   }
 
   /**
@@ -791,136 +1150,122 @@ export class FlybyDirector {
     toWorld(pseudo, scratchAt, out);
   }
 
-  /**
-   * Place the ship on a journey, and decide where it is looking.
-   *
-   * The speed profile is a raised cosine — zero at both ends, everything in the
-   * middle — which is the shape that makes a hundred million kilometres read as
-   * *far* rather than as *slow*. A linear crossing at the same average speed
-   * covers the same ground and says nothing, because the eye reads change and a
-   * constant rate is no change at all. The acceleration is what is felt.
-   *
-   * The aim crossfades across the leg: back at what is being left for the first
-   * third, forward at what is coming for the last, and swinging between them in
-   * the middle, where there is nothing to see either way. Leaving and arriving
-   * are both worth watching; the part between them is worth crossing.
-   */
-  private sampleTour(seconds: number, t: number, out: Vec3, look: Vec3): void {
-    const legs = this.tour!;
-    let start = 0;
-    let index = 0;
-    for (; index < legs.length; index++) {
-      const span = legs[index]!.seconds + legs[index]!.linger;
-      if (seconds < start + span || index === legs.length - 1) break;
-      start += span;
-    }
-    const leg = legs[index]!;
-    const prev = legs[Math.max(0, index - 1)]!;
-    const local = Math.max(0, seconds - start);
-
-    if (leg.seconds <= 0 || local >= leg.seconds) {
-      // Alongside — and still moving. Holding the standoff exactly reads as a
-      // halt, which is what was reported: the journey appeared to stop dead at
-      // the Moon. A slow arc around the body instead, about twenty degrees over
-      // the whole pause, so the limb turns and the light moves across it.
-      const held = Math.max(0, local - leg.seconds);
-      const sweep = ((leg.arc ?? 40) * Math.PI) / 180;
-      // From zero, which is where the approach put the ship — not centred on
-      // it. Centred, the position jumped by half the arc the instant the leg
-      // ended: a hundred and twenty degrees at Mars, in one frame.
-      //
-      // Linear rather than eased, too. An ease here would start the pass at a
-      // standstill, and the leg now arrives at exactly this speed; easing it
-      // would put the discontinuity back where it was taken out.
-      const k = Math.max(0, Math.min(1, held / Math.max(1, leg.linger)));
-      const swing = k * sweep;
-      this.legPoint(leg, t, out, swing);
-      ephemeris.position(leg.body, t, tourAim);
-      sub(look, tourAim, out);
-      normalize(look, look);
-      return;
-    }
-    this.legPoint(leg, t, tourTo);
-
-    // Depart from where the previous pass *finished*, not from where it began.
-    // Leaving from the start of an arc it had already flown put the ship back
-    // round the far side of the planet in one frame — measured, a 734-fold jump
-    // in speed at exactly the Mars hand-over.
-    this.legPoint(prev, t, tourFrom, ((prev.arc ?? 40) * Math.PI) / 180);
-    const u = local / leg.seconds;
-    const eased = sampleEase(this.tourEases[index] ?? [0, 1], u);
-    out.x = tourFrom.x + (tourTo.x - tourFrom.x) * eased;
-    out.y = tourFrom.y + (tourTo.y - tourFrom.y) * eased;
-    out.z = tourFrom.z + (tourTo.z - tourFrom.z) * eased;
-
-    // Look back at whatever is actually worth looking at, which is not always
-    // the thing just left. Leaving the Moon for Mars, the Moon is enormous for
-    // a few seconds and then gone, while Earth stays a disc for far longer —
-    // and it is Earth receding that says *you are moving*, on a leg where
-    // nothing else in the frame changes at all. Picking by apparent size hands
-    // over from one to the other on its own.
-    let backBody = prev.body;
-    let backDist = 0;
-    {
-      // Judged a few seconds ahead rather than now, which is the whole of it.
-      // Measured on the leg out to Mars: at the moment of departure the Moon is
-      // 36 degrees wide and Earth is 2, so picking by present size picks the
-      // Moon — and four seconds later the Moon is 2.4 degrees and falling
-      // through the floor, so the camera has already swung away. Earth is still
-      // 1.6 and holds for another twenty seconds. What is wanted behind you on
-      // a long departure is the thing you came *from*, and looking a little
-      // ahead is what finds it without having to say so.
-      const ahead = Math.min(1, u + 0.09);
-      const ea = sampleEase(this.tourEases[index] ?? [0, 1], ahead);
-      tourSoon.x = tourFrom.x + (tourTo.x - tourFrom.x) * ea;
-      tourSoon.y = tourFrom.y + (tourTo.y - tourFrom.y) * ea;
-      tourSoon.z = tourFrom.z + (tourTo.z - tourFrom.z) * ea;
-      let bestSpan = -1;
-      for (const id of [prev.body, legs[Math.max(0, index - 2)]!.body]) {
-        ephemeris.position(id, t, tourAim);
-        sub(tourBack, tourAim, tourSoon);
-        const span = getBody(id).radius / Math.max(1, len(tourBack));
-        if (span > bestSpan) { bestSpan = span; backBody = id; }
+  /** Where the ship is on a journey, in the world. */
+  private sampleTour(seconds: number, t: number, out: Vec3): void {
+    const n = this.nodes.length;
+    if (n === 0) { set(out, 0, 0, 0); return; }
+    crAt((i, o) => this.nodeAt(i, t, o), n, this.segmentAt(seconds), out);
+    // The spline can bow inward between waypoints; never let it inside
+    // anything it is flying past.
+    for (let i = 0; i < this.tourBodies.length; i++) {
+      const id = this.tourBodies[i]!;
+      ephemeris.position(id, t, tourAim);
+      sub(tourBack, out, tourAim);
+      const floor = getBody(id).radius * 1.04;
+      const d = len(tourBack);
+      if (d < floor && d > 0) {
+        normalize(tourBack, tourBack);
+        copy(out, tourAim);
+        addScaled(out, out, tourBack, floor);
       }
-      ephemeris.position(backBody, t, tourAim);
-      sub(tourBack, tourAim, out);
-      backDist = Math.max(1, len(tourBack));
     }
-    ephemeris.position(backBody, t, tourAim);
-    sub(tourBack, tourAim, out);
-    const behind = backDist || len(tourBack);
-    normalize(tourBack, tourBack);
-    ephemeris.position(leg.body, t, tourAim);
-    sub(look, tourAim, out);
-    normalize(look, look);
+  }
 
-    // Turn away when there is no longer anything back there to look at.
+  /**
+   * Where the camera is looking on a journey.
+   *
+   * Two separate things, and they were tangled together before. *What* to look
+   * at is a judgement; *how fast the view may turn* is a property of the ship.
+   * Deciding both in one expression meant that whenever the judgement changed,
+   * the view changed with it, at whatever speed the arithmetic implied — which
+   * is where the violent swings came from.
+   *
+   * The judgement: look at whichever body will be largest by the time the
+   * camera has finished turning to it. Leaving the Moon for Mars, the Moon
+   * fills the window and Mars is a dot — but the Moon will be gone in four
+   * seconds and Mars is what the next half minute is about, so judging each
+   * candidate at the moment you would actually arrive on it picks Mars without
+   * needing to be told which leg this is. On the way out of Earth the same rule
+   * keeps Earth, because turning away and back would cost more than it is
+   * worth. Nothing here knows about legs.
+   *
+   * The turn: a critically damped spring with a ceiling on its rate. It cannot
+   * start abruptly, it cannot overshoot, and it cannot exceed the ceiling — so
+   * no decision the judgement makes, however sudden, can produce a snap.
+   */
+  private aimTour(dt: number, seconds: number, t: number, pos: Vec3, out: Vec3): void {
+    const MAX_RATE = (13 * Math.PI) / 180;
+    const TAU = 1.7;
+    const started = len(this.aimDir) > 0.5;
+
+    let best = this.aimSubject || this.tour![0]!.body;
+    let bestSize = -1;
+    for (const id of this.tourBodies) {
+      ephemeris.position(id, t, aimTo);
+      sub(aimWant, aimTo, pos);
+      normalize(aimWant, aimWant);
+      const turn = started
+        ? Math.acos(Math.max(-1, Math.min(1, dot(this.aimDir, aimWant))))
+        : 0;
+      this.sampleTour(Math.min(this.total, seconds + turn / MAX_RATE), t, aimSoon);
+      ephemeris.position(id, t, aimTo);
+      sub(aimSoon, aimTo, aimSoon);
+      const size = getBody(id).radius / Math.max(1, len(aimSoon));
+      if (size > bestSize) { bestSize = size; best = id; }
+    }
+    this.aimSubject = best;
+
+    ephemeris.position(best, t, aimTo);
+    sub(aimWant, aimTo, pos);
+    normalize(aimWant, aimWant);
+    if (!started) { copy(this.aimDir, aimWant); this.aimRate = 0; }
+
+    // Follow the subject's motion across the sky before correcting anything.
     //
-    // This was a fixed fraction of the leg — back for the first third, forward
-    // after two thirds — and on a leg to Mars that is far too late. The speed
-    // profile puts the ship 19% of the way along by a third of the time, which
-    // on a hundred million kilometres is nineteen million: Earth is down to a
-    // readable disc after 15% of the leg's time and to a bare dot after 25%.
-    // The camera was starting its swing nine points after the thing it was
-    // watching had stopped being a thing.
-    //
-    // So the swing follows the apparent size of what is being left rather than
-    // the clock. It holds while the body is wider than six degrees, is done by
-    // the time it is under two thirds of a degree, and a time limit finishes it
-    // regardless by the middle of the leg — otherwise the short hop to the Moon
-    // would spend all of itself looking back at Earth.
-    const behindDeg = (2 * Math.asin(Math.min(1, getBody(backBody).radius / Math.max(1, behind)))
-      * 180) / Math.PI;
-    // Three degrees down to a third of one: the body is still a shape at the
-    // top of that and a dot at the bottom, and the swing happens across it.
-    const bySize = Math.max(0, Math.min(1, (3 - behindDeg) / 2.65));
-    const byTime = Math.max(0, Math.min(1, (u - 0.3) / 0.28));
-    const w = Math.max(bySize, byTime);
-    const blend = w * w * (3 - 2 * w);
-    look.x = tourBack.x + (look.x - tourBack.x) * blend;
-    look.y = tourBack.y + (look.y - tourBack.y) * blend;
-    look.z = tourBack.z + (look.z - tourBack.z) * blend;
-    normalize(look, look);
+    // A spring alone cannot track something that is moving: it settles at
+    // whatever error makes its restoring force equal the rate it has to keep
+    // up, and that lag is proportional to the speed. Measured at Mars, where
+    // the line of sight swings eight degrees a second, the planet sat
+    // thirty-eight degrees off centre for the whole pass — the shot of the
+    // journey, framed at the edge. So the camera is turned at the rate the
+    // subject is actually moving first, and the spring is left with nothing to
+    // do but take out the genuine error. Which is what tracking anything by
+    // hand amounts to: you move with it, and correct.
+    const FEED = 0.05;
+    this.sampleTour(Math.min(this.total, seconds + FEED), t + FEED, aimSoon);
+    ephemeris.position(best, t + FEED, aimNext);
+    sub(aimNext, aimNext, aimSoon);
+    normalize(aimNext, aimNext);
+    cross(aimAxis, aimWant, aimNext);
+    const drift = Math.atan2(len(aimAxis), dot(aimWant, aimNext)) / FEED;
+    if (len(aimAxis) > 1e-9 && drift > 1e-6) {
+      normalize(aimAxis, aimAxis);
+      // Generous ceiling: a genuine close pass really does sweep this fast,
+      // and that sweep is the shot. This only catches the degenerate case.
+      const step = Math.min(drift, (60 * Math.PI) / 180) * dt;
+      cross(aimTo, aimAxis, this.aimDir);
+      scale(this.aimDir, this.aimDir, Math.cos(step));
+      addScaled(this.aimDir, this.aimDir, aimTo, Math.sin(step));
+      normalize(this.aimDir, this.aimDir);
+    }
+
+    cross(aimAxis, this.aimDir, aimWant);
+    const sine = len(aimAxis);
+    const error = Math.atan2(sine, dot(this.aimDir, aimWant));
+    const w = 1 / TAU;
+    this.aimRate += (w * w * error - 2 * w * this.aimRate) * dt;
+    this.aimRate = Math.max(0, Math.min(MAX_RATE, this.aimRate));
+    if (sine > 1e-9) {
+      normalize(aimAxis, aimAxis);
+      const step = Math.min(error, this.aimRate * dt);
+      // Rodrigues. The axis is perpendicular to the current aim by
+      // construction, so the parallel term is zero.
+      cross(aimTo, aimAxis, this.aimDir);
+      scale(this.aimDir, this.aimDir, Math.cos(step));
+      addScaled(this.aimDir, this.aimDir, aimTo, Math.sin(step));
+      normalize(this.aimDir, this.aimDir);
+    }
+    copy(out, this.aimDir);
   }
 
   /** World position along the route at a given time offset. */
@@ -953,11 +1298,12 @@ export class FlybyDirector {
 
     const h = 0.08;
     if (this.tour) {
-      this.sampleTour(this.elapsed, t, posA, outLook);
-      this.sampleTour(this.elapsed + h, t + h, posB, tourBack);
+      this.sampleTour(this.elapsed, t, posA);
+      this.sampleTour(this.elapsed + h, t + h, posB);
       copy(outPos, posA);
       sub(outVel, posB, posA);
       scale(outVel, outVel, 1 / h);
+      this.aimTour(dt, this.elapsed, t, outPos, outLook);
       set(outUp, 0, 0, 1);
       if (this.elapsed >= this.total) {
         this.active = false;
@@ -1002,6 +1348,11 @@ export class FlybyDirector {
 
   /** Where the route begins, for placing the ship before it starts. */
   startPosition(t: number, outPos: Vec3, outVel: Vec3): void {
+    if (this.tour) {
+      this.sampleTour(0, t, outPos);
+      ephemeris.state(this.tour[0]!.body, t, tourAim, outVel);
+      return;
+    }
     this.sample(0, t, outPos);
     copy(outVel, bodyVel);
   }
